@@ -27,6 +27,12 @@ class ApiClient {
     _token = null;
   }
 
+  Future<Map<String, dynamic>> logout() async {
+    final response = await _postJson('/api/auth/logout', {});
+    clearToken();
+    return response;
+  }
+
   Uri _uri(String path) => Uri.parse('$baseUrl$path');
 
   Map<String, String> get _jsonHeaders => {
@@ -84,6 +90,37 @@ class ApiClient {
     return _putJson('/api/profile', {'profile': profile, 'goal': goal});
   }
 
+  Future<Map<String, dynamic>> forgotPassword(String email) {
+    return _postJson('/api/auth/forgot-password', {'email': email});
+  }
+
+  Future<Map<String, dynamic>> verifyOtp({required String email, required String otp}) {
+    return _postJson('/api/auth/verify-otp', {'email': email, 'otp': otp});
+  }
+
+  Future<Map<String, dynamic>> changePassword({
+    required String email,
+    String? oldPassword,
+    String? otp,
+    required String newPassword,
+  }) {
+    return _postJson('/api/auth/change-password', {
+      'email': email,
+      'old_password': oldPassword,
+      'otp': otp,
+      'new_password': newPassword,
+    });
+  }
+
+  Future<List<Map<String, dynamic>>> allergies() async {
+    final data = await _get('/api/allergies') as List<dynamic>;
+    return data.map((item) => Map<String, dynamic>.from(item as Map)).toList();
+  }
+
+  Future<Map<String, dynamic>> addAllergy(String ingredient, {String? severity}) {
+    return _postJson('/api/allergies', {'ingredient': ingredient, 'severity': severity});
+  }
+
   Future<List<Map<String, dynamic>>> foods({String? search}) async {
     final query = search == null || search.trim().isEmpty
         ? ''
@@ -129,6 +166,41 @@ class ApiClient {
     });
   }
 
+  Future<List<Map<String, dynamic>>> generateWeeklyMealPlan(Map<String, dynamic> payload) async {
+    final data = await _postJsonList('/api/meal-plans/generate-weekly', {
+      'recommendation_request': payload,
+    });
+    return data;
+  }
+
+  Future<List<Map<String, dynamic>>> groceryLists() async {
+    final data = await _get('/api/grocery-lists') as List<dynamic>;
+    return data.map((item) => Map<String, dynamic>.from(item as Map)).toList();
+  }
+
+  Future<Map<String, dynamic>> generateGroceryList({int? mealPlanId, double? budget}) {
+    return _postJson('/api/grocery-lists/generate', {
+      'meal_plan_id': mealPlanId,
+      'budget': budget,
+    });
+  }
+
+  Future<Map<String, dynamic>> weightProgress() {
+    return _getMap('/api/progress/weight');
+  }
+
+  Future<Map<String, dynamic>> recordWeight(double weightKg) {
+    return _postJson('/api/progress/weight', {'weight_kg': weightKg});
+  }
+
+  Future<Map<String, dynamic>> waterLog(String date) {
+    return _getMap('/api/water/$date');
+  }
+
+  Future<Map<String, dynamic>> logWater(double amountMl) {
+    return _postJson('/api/water', {'amount_ml': amountMl});
+  }
+
   Future<Map<String, dynamic>> recognizeFoodImage({
     required Uint8List bytes,
     required String filename,
@@ -149,6 +221,10 @@ class ApiClient {
     return _postJson('/api/ai/health-risk', payload);
   }
 
+  Future<Map<String, dynamic>> substitutes(String foodName) {
+    return _getMap('/api/ai/substitutes/${Uri.encodeComponent(foodName)}');
+  }
+
   Future<Map<String, dynamic>> _getMap(String path) async {
     final data = await _get(path);
     return Map<String, dynamic>.from(data as Map);
@@ -162,6 +238,12 @@ class ApiClient {
   Future<Map<String, dynamic>> _postJson(String path, Map<String, dynamic> body) async {
     final response = await http.post(_uri(path), headers: _jsonHeaders, body: jsonEncode(body));
     return Map<String, dynamic>.from(_decode(response) as Map);
+  }
+
+  Future<List<Map<String, dynamic>>> _postJsonList(String path, Map<String, dynamic> body) async {
+    final response = await http.post(_uri(path), headers: _jsonHeaders, body: jsonEncode(body));
+    final data = _decode(response) as List<dynamic>;
+    return data.map((item) => Map<String, dynamic>.from(item as Map)).toList();
   }
 
   Future<Map<String, dynamic>> _putJson(String path, Map<String, dynamic> body) async {
@@ -191,4 +273,3 @@ class ApiClient {
     return 'Request failed with status ${response.statusCode}';
   }
 }
-
