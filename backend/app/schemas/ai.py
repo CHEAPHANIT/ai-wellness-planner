@@ -13,6 +13,9 @@ class CaloriePredictionRequest(BaseModel):
 class CaloriePredictionResponse(BaseModel):
     recommended_daily_calories: int
     bmr: int
+    bmi: float
+    bmi_status: str
+    maintenance_calories: int
     explanation: str
 
 
@@ -20,6 +23,9 @@ class MealRecommendationRequest(BaseModel):
     daily_calorie_target: int = Field(gt=800, lt=7000)
     health_goal: str = "maintain"
     food_preference: str | None = None
+    allergies: list[str] = []
+    budget: float | None = None
+    days: int = Field(default=1, ge=1, le=7)
     protein_requirement_g: float | None = None
     carbohydrate_requirement_g: float | None = None
     fat_requirement_g: float | None = None
@@ -33,6 +39,7 @@ class RecommendedFood(BaseModel):
     carbs_g: float
     fat_g: float
     serving_size: str
+    image_url: str | None = None
 
 
 class MealBlock(BaseModel):
@@ -76,4 +83,9 @@ class HealthRiskResponse(BaseModel):
     risk_level: str
     bmi: float
     recommendations: list[str]
+    disclaimer: str = "This is not a medical diagnosis. Consult a qualified health professional for personal medical advice."
 
+
+class SubstituteResponse(BaseModel):
+    food: str
+    alternatives: list[str]

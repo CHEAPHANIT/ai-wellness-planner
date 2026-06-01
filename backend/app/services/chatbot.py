@@ -1,17 +1,23 @@
 from app.core.config import settings
+from app.models.user import User
 from app.schemas.ai import ChatRequest, ChatResponse
 
 
 class NutritionChatbot:
-    def answer(self, payload: ChatRequest) -> ChatResponse:
+    def answer(self, payload: ChatRequest, user: User | None = None, today_calories: float | None = None) -> ChatResponse:
         question = payload.question.lower()
+        context = ""
+        if user and user.profile:
+            context = f" Based on your goal and profile, keep advice aligned with {user.profile.food_preference or user.profile.dietary_preference or 'balanced eating'}."
+        if today_calories is not None:
+            context += f" You have logged about {round(today_calories)} calories today."
         if settings.openai_api_key:
             # Hook point for OpenAI, Gemini, or Claude integration in production.
             return ChatResponse(
-                answer=self._rule_based_answer(question),
+                answer=self._rule_based_answer(question) + context,
                 source="configured-ai-fallback",
             )
-        return ChatResponse(answer=self._rule_based_answer(question), source="local-rule-based")
+        return ChatResponse(answer=self._rule_based_answer(question) + context, source="local-rule-based")
 
     def _rule_based_answer(self, question: str) -> str:
         if "pizza" in question and ("diet" in question or "weight" in question):
@@ -23,4 +29,3 @@ class NutritionChatbot:
         if "diabetes" in question:
             return "Choose high-fiber carbohydrates, distribute carbs across meals, and discuss personal targets with a qualified clinician."
         return "Focus on total calories, protein, fiber, hydration, and consistency. For medical conditions, use this app as support and confirm decisions with a health professional."
-

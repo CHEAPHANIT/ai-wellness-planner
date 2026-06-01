@@ -23,11 +23,11 @@ class HealthRiskService:
             score -= 1
 
         if score >= 5:
-            level = "High Health Risk"
+            level = "High Risk"
         elif score >= 3:
-            level = "Moderate Health Risk"
+            level = "Medium Risk"
         else:
-            level = "Low Health Risk"
+            level = "Low Risk"
 
         recommendations = [
             "Track meals for at least two weeks to identify calorie and protein patterns.",
@@ -42,4 +42,3 @@ class HealthRiskService:
     def _calculate_bmi(self, weight_kg: float, height_cm: float) -> float:
         height_m = height_cm / 100
         return weight_kg / (height_m * height_m)
-

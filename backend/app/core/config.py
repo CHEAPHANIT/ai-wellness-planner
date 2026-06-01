@@ -3,7 +3,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    app_name: str = "AI Meal Planning API"
+    app_name: str = "NutriAI API"
     environment: str = "development"
     database_url: str = Field(
         default="postgresql+psycopg://postgres:postgres@localhost:5432/ai_meal_planning",
@@ -23,4 +23,3 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
-

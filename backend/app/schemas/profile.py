@@ -8,6 +8,8 @@ class ProfileBase(BaseModel):
     weight_kg: float | None = Field(default=None, gt=20, lt=400)
     activity_level: str | None = None
     food_preference: str | None = None
+    dietary_preference: str | None = None
+    health_conditions: str | None = None
     exercise_frequency: str | None = None
     eating_habits: str | None = None
 
@@ -36,4 +38,3 @@ class GoalRead(GoalBase):
     user_id: int
 
     model_config = {"from_attributes": True}
-

@@ -27,10 +27,23 @@ class CaloriePredictionService:
 
         multiplier = self.activity_multipliers.get(payload.activity_level.lower(), 1.375)
         adjustment = self.goal_adjustments.get(payload.goal.lower(), 0)
-        calories = max(1200, round(bmr * multiplier + adjustment))
+        maintenance = round(bmr * multiplier)
+        calories = max(1200, round(maintenance + adjustment))
+        bmi = payload.weight_kg / ((payload.height_cm / 100) ** 2)
         return CaloriePredictionResponse(
             recommended_daily_calories=calories,
             bmr=round(bmr),
-            explanation="Prediction uses a Mifflin-St Jeor baseline with activity and goal adjustments.",
+            bmi=round(bmi, 2),
+            bmi_status=self._bmi_status(bmi),
+            maintenance_calories=maintenance,
+            explanation="Prediction uses BMI and a Mifflin-St Jeor BMR baseline with activity and goal adjustments.",
         )
 
+    def _bmi_status(self, bmi: float) -> str:
+        if bmi < 18.5:
+            return "Underweight"
+        if bmi < 25:
+            return "Normal"
+        if bmi < 30:
+            return "Overweight"
+        return "Obese"

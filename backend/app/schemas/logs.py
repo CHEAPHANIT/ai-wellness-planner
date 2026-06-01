@@ -29,4 +29,5 @@ class NutritionSummary(BaseModel):
     protein_g: float
     carbs_g: float
     fat_g: float
-
+    remaining_calories: float | None = None
+    nutrition_score: int | None = None

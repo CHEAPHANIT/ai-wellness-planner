@@ -9,11 +9,12 @@ class FoodCreate(BaseModel):
     protein_g: float = Field(ge=0, default=0)
     carbs_g: float = Field(ge=0, default=0)
     fat_g: float = Field(ge=0, default=0)
+    image_url: str | None = None
     tags: list[str] = []
+    allergens: list[str] = []
 
 
 class FoodRead(FoodCreate):
     id: int
 
     model_config = {"from_attributes": True}
-

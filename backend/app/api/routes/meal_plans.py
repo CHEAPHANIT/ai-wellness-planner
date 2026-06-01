@@ -44,3 +44,27 @@ def generate_meal_plan(
     db.refresh(plan)
     return plan
 
+
+@router.post("/generate-weekly", response_model=list[MealPlanRead], status_code=status.HTTP_201_CREATED)
+def generate_weekly_meal_plan(
+    payload: MealPlanCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> list[MealPlan]:
+    start_date = payload.plan_date or date.today()
+    created: list[MealPlan] = []
+    for offset in range(7):
+        request = payload.recommendation_request.model_copy(update={"days": 1})
+        recommendation = MealRecommendationService(db).recommend(request)
+        plan = MealPlan(
+            user_id=current_user.id,
+            plan_date=start_date.fromordinal(start_date.toordinal() + offset),
+            daily_calories=recommendation.daily_calorie_target,
+            plan_json=recommendation.model_dump(),
+        )
+        db.add(plan)
+        created.append(plan)
+    db.commit()
+    for plan in created:
+        db.refresh(plan)
+    return created

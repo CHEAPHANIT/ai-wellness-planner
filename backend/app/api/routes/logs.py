@@ -6,7 +6,9 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_current_user, get_db
 from app.models.food import Food
 from app.models.food_log import FoodLog
+from app.models.goal import Goal
 from app.models.nutrition_log import NutritionLog
+from app.models.water import WaterLog
 from app.models.user import User
 from app.schemas.logs import FoodLogCreate, FoodLogRead, NutritionSummary
 
@@ -68,12 +70,17 @@ def get_nutrition_summary(
     )
     if summary is None:
         return NutritionSummary(log_date=log_date, calories=0, protein_g=0, carbs_g=0, fat_g=0)
+    goal = db.query(Goal).filter(Goal.user_id == current_user.id).first()
+    water = db.query(WaterLog).filter(WaterLog.user_id == current_user.id, WaterLog.log_date == log_date).first()
+    target = goal.daily_calorie_target if goal and goal.daily_calorie_target else None
     return NutritionSummary(
         log_date=summary.log_date,
         calories=summary.calories_total,
         protein_g=summary.protein_total_g,
         carbs_g=summary.carbs_total_g,
         fat_g=summary.fat_total_g,
+        remaining_calories=round(target - summary.calories_total, 2) if target else None,
+        nutrition_score=_nutrition_score(summary, target, water.amount_ml if water else 0, water.recommended_ml if water else 0),
     )
 
 
@@ -103,3 +110,19 @@ def _update_daily_nutrition(db: Session, user_id: int, log_date: date) -> None:
     summary.protein_total_g = round(protein, 2)
     summary.carbs_total_g = round(carbs, 2)
     summary.fat_total_g = round(fat, 2)
+
+
+def _nutrition_score(summary: NutritionLog, calorie_target: float | None, water_ml: float, water_target_ml: float) -> int:
+    score = 40
+    if calorie_target:
+        calorie_gap = abs(summary.calories_total - calorie_target) / calorie_target
+        score += max(0, round(25 * (1 - calorie_gap)))
+    if summary.protein_total_g >= 60:
+        score += 15
+    elif summary.protein_total_g >= 30:
+        score += 8
+    if water_target_ml and water_ml:
+        score += max(0, round(15 * min(water_ml / water_target_ml, 1)))
+    if summary.carbs_total_g > 0 and summary.fat_total_g > 0 and summary.protein_total_g > 0:
+        score += 5
+    return min(100, max(0, score))

@@ -15,6 +15,15 @@ class MealRecommendationService:
 
     def recommend(self, payload: MealRecommendationRequest) -> MealRecommendationResponse:
         foods = self.db.query(Food).order_by(Food.calories.asc()).all()
+        allergies = {item.strip().lower() for item in payload.allergies if item.strip()}
+        if allergies:
+            foods = [
+                food
+                for food in foods
+                if not allergies.intersection({tag.lower() for tag in (food.tags or [])})
+                and not allergies.intersection({item.lower() for item in (food.allergens or [])})
+                and all(allergy not in food.name.lower() for allergy in allergies)
+            ]
         if payload.food_preference:
             preferred = [
                 food
@@ -36,6 +45,10 @@ class MealRecommendationService:
             "Recommendations are generated from available foods and macro targets.",
             "Adjust portions based on hunger, training schedule, and medical guidance.",
         ]
+        if allergies:
+            notes.append(f"Avoided foods matching allergies: {', '.join(sorted(allergies))}.")
+        if payload.budget:
+            notes.append(f"Budget target considered: {payload.budget:.2f}. Estimated prices are simplified for this project.")
         if payload.health_goal.lower() in {"lose_weight", "weight_loss"}:
             notes.append("Weight-loss plans prioritize lower-calorie, high-protein foods.")
         return MealRecommendationResponse(
@@ -71,6 +84,7 @@ class MealRecommendationService:
                     carbs_g=food.carbs_g,
                     fat_g=food.fat_g,
                     serving_size=food.serving_size,
+                    image_url=food.image_url,
                 )
                 for food in selected
             ],
@@ -83,4 +97,3 @@ class MealRecommendationService:
             "dinner": {"protein", "vegetable", "carbohydrate"},
             "snack": {"snack", "fruit"},
         }[meal_type]
-
