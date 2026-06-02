@@ -1602,7 +1602,7 @@ class ResponsiveGrid extends StatelessWidget {
           physics: const NeverScrollableScrollPhysics(),
           mainAxisSpacing: 12,
           crossAxisSpacing: 12,
-          childAspectRatio: 3.2,
+          childAspectRatio: 2.8,
           children: children,
         );
       },
