@@ -36,13 +36,13 @@ class ApiClient {
   Uri _uri(String path) => Uri.parse('$baseUrl$path');
 
   Map<String, String> get _jsonHeaders => {
-        'Content-Type': 'application/json',
-        if (_token != null) 'Authorization': 'Bearer $_token',
-      };
+    'Content-Type': 'application/json',
+    if (_token != null) 'Authorization': 'Bearer $_token',
+  };
 
   Map<String, String> get _authHeaders => {
-        if (_token != null) 'Authorization': 'Bearer $_token',
-      };
+    if (_token != null) 'Authorization': 'Bearer $_token',
+  };
 
   Future<void> register({
     required String email,
@@ -94,7 +94,10 @@ class ApiClient {
     return _postJson('/api/auth/forgot-password', {'email': email});
   }
 
-  Future<Map<String, dynamic>> verifyOtp({required String email, required String otp}) {
+  Future<Map<String, dynamic>> verifyOtp({
+    required String email,
+    required String otp,
+  }) {
     return _postJson('/api/auth/verify-otp', {'email': email, 'otp': otp});
   }
 
@@ -117,8 +120,18 @@ class ApiClient {
     return data.map((item) => Map<String, dynamic>.from(item as Map)).toList();
   }
 
-  Future<Map<String, dynamic>> addAllergy(String ingredient, {String? severity}) {
-    return _postJson('/api/allergies', {'ingredient': ingredient, 'severity': severity});
+  Future<Map<String, dynamic>> addAllergy(
+    String ingredient, {
+    String? severity,
+  }) {
+    return _postJson('/api/allergies', {
+      'ingredient': ingredient,
+      'severity': severity,
+    });
+  }
+
+  Future<void> deleteAllergy(int allergyId) async {
+    await _delete('/api/allergies/$allergyId');
   }
 
   Future<List<Map<String, dynamic>>> foods({String? search}) async {
@@ -127,6 +140,26 @@ class ApiClient {
         : '?search=${Uri.encodeQueryComponent(search.trim())}';
     final data = await _get('/api/foods$query') as List<dynamic>;
     return data.map((item) => Map<String, dynamic>.from(item as Map)).toList();
+  }
+
+  Future<Map<String, dynamic>> createFood({
+    required String name,
+    required String category,
+    required String servingSize,
+    required double calories,
+    required double proteinG,
+    required double carbsG,
+    required double fatG,
+  }) {
+    return _postJson('/api/foods', {
+      'name': name,
+      'category': category,
+      'serving_size': servingSize,
+      'calories': calories,
+      'protein_g': proteinG,
+      'carbs_g': carbsG,
+      'fat_g': fatG,
+    });
   }
 
   Future<Map<String, dynamic>> logFood({
@@ -160,17 +193,30 @@ class ApiClient {
     return _postJson('/api/ai/meals', payload);
   }
 
-  Future<Map<String, dynamic>> generateMealPlan(Map<String, dynamic> payload) {
+  Future<Map<String, dynamic>> generateMealPlan(
+    Map<String, dynamic> payload, {
+    String? planDate,
+  }) {
     return _postJson('/api/meal-plans/generate', {
+      'plan_date': planDate,
       'recommendation_request': payload,
     });
   }
 
-  Future<List<Map<String, dynamic>>> generateWeeklyMealPlan(Map<String, dynamic> payload) async {
+  Future<List<Map<String, dynamic>>> generateWeeklyMealPlan(
+    Map<String, dynamic> payload, {
+    String? planDate,
+  }) async {
     final data = await _postJsonList('/api/meal-plans/generate-weekly', {
+      'plan_date': planDate,
       'recommendation_request': payload,
     });
     return data;
+  }
+
+  Future<List<Map<String, dynamic>>> mealPlans() async {
+    final data = await _get('/api/meal-plans') as List<dynamic>;
+    return data.map((item) => Map<String, dynamic>.from(item as Map)).toList();
   }
 
   Future<List<Map<String, dynamic>>> groceryLists() async {
@@ -178,10 +224,22 @@ class ApiClient {
     return data.map((item) => Map<String, dynamic>.from(item as Map)).toList();
   }
 
-  Future<Map<String, dynamic>> generateGroceryList({int? mealPlanId, double? budget}) {
+  Future<Map<String, dynamic>> generateGroceryList({
+    int? mealPlanId,
+    double? budget,
+  }) {
     return _postJson('/api/grocery-lists/generate', {
       'meal_plan_id': mealPlanId,
       'budget': budget,
+    });
+  }
+
+  Future<Map<String, dynamic>> updateGroceryItem({
+    required int itemId,
+    required bool purchased,
+  }) {
+    return _patchJson('/api/grocery-lists/items/$itemId', {
+      'purchased': purchased,
     });
   }
 
@@ -189,25 +247,39 @@ class ApiClient {
     return _getMap('/api/progress/weight');
   }
 
-  Future<Map<String, dynamic>> recordWeight(double weightKg) {
-    return _postJson('/api/progress/weight', {'weight_kg': weightKg});
+  Future<Map<String, dynamic>> recordWeight(
+    double weightKg, {
+    String? recordedDate,
+  }) {
+    return _postJson('/api/progress/weight', {
+      'weight_kg': weightKg,
+      'recorded_date': recordedDate,
+    });
   }
 
   Future<Map<String, dynamic>> waterLog(String date) {
     return _getMap('/api/water/$date');
   }
 
-  Future<Map<String, dynamic>> logWater(double amountMl) {
-    return _postJson('/api/water', {'amount_ml': amountMl});
+  Future<Map<String, dynamic>> logWater(double amountMl, {String? logDate}) {
+    return _postJson('/api/water', {
+      'amount_ml': amountMl,
+      'log_date': logDate,
+    });
   }
 
   Future<Map<String, dynamic>> recognizeFoodImage({
     required Uint8List bytes,
     required String filename,
   }) async {
-    final request = http.MultipartRequest('POST', _uri('/api/ai/image-recognition'));
+    final request = http.MultipartRequest(
+      'POST',
+      _uri('/api/ai/image-recognition'),
+    );
     request.headers.addAll(_authHeaders);
-    request.files.add(http.MultipartFile.fromBytes('image', bytes, filename: filename));
+    request.files.add(
+      http.MultipartFile.fromBytes('image', bytes, filename: filename),
+    );
     final streamed = await request.send();
     final response = await http.Response.fromStream(streamed);
     return Map<String, dynamic>.from(_decode(response) as Map);
@@ -235,20 +307,58 @@ class ApiClient {
     return _decode(response);
   }
 
-  Future<Map<String, dynamic>> _postJson(String path, Map<String, dynamic> body) async {
-    final response = await http.post(_uri(path), headers: _jsonHeaders, body: jsonEncode(body));
+  Future<Map<String, dynamic>> _postJson(
+    String path,
+    Map<String, dynamic> body,
+  ) async {
+    final response = await http.post(
+      _uri(path),
+      headers: _jsonHeaders,
+      body: jsonEncode(body),
+    );
     return Map<String, dynamic>.from(_decode(response) as Map);
   }
 
-  Future<List<Map<String, dynamic>>> _postJsonList(String path, Map<String, dynamic> body) async {
-    final response = await http.post(_uri(path), headers: _jsonHeaders, body: jsonEncode(body));
+  Future<List<Map<String, dynamic>>> _postJsonList(
+    String path,
+    Map<String, dynamic> body,
+  ) async {
+    final response = await http.post(
+      _uri(path),
+      headers: _jsonHeaders,
+      body: jsonEncode(body),
+    );
     final data = _decode(response) as List<dynamic>;
     return data.map((item) => Map<String, dynamic>.from(item as Map)).toList();
   }
 
-  Future<Map<String, dynamic>> _putJson(String path, Map<String, dynamic> body) async {
-    final response = await http.put(_uri(path), headers: _jsonHeaders, body: jsonEncode(body));
+  Future<Map<String, dynamic>> _putJson(
+    String path,
+    Map<String, dynamic> body,
+  ) async {
+    final response = await http.put(
+      _uri(path),
+      headers: _jsonHeaders,
+      body: jsonEncode(body),
+    );
     return Map<String, dynamic>.from(_decode(response) as Map);
+  }
+
+  Future<Map<String, dynamic>> _patchJson(
+    String path,
+    Map<String, dynamic> body,
+  ) async {
+    final response = await http.patch(
+      _uri(path),
+      headers: _jsonHeaders,
+      body: jsonEncode(body),
+    );
+    return Map<String, dynamic>.from(_decode(response) as Map);
+  }
+
+  Future<void> _delete(String path) async {
+    final response = await http.delete(_uri(path), headers: _jsonHeaders);
+    _decode(response);
   }
 
   dynamic _decode(http.Response response) {

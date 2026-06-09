@@ -13,7 +13,11 @@ class MealRecommendationService:
     def __init__(self, db: Session) -> None:
         self.db = db
 
-    def recommend(self, payload: MealRecommendationRequest) -> MealRecommendationResponse:
+    def recommend(
+        self,
+        payload: MealRecommendationRequest,
+        rotation_offset: int = 0,
+    ) -> MealRecommendationResponse:
         foods = self.db.query(Food).order_by(Food.calories.asc()).all()
         allergies = {item.strip().lower() for item in payload.allergies if item.strip()}
         if allergies:
@@ -40,7 +44,10 @@ class MealRecommendationService:
             "dinner": payload.daily_calorie_target * 0.30,
             "snack": payload.daily_calorie_target * 0.10,
         }
-        meals = [self._build_meal(meal_type, target, foods) for meal_type, target in meal_targets.items()]
+        meals = [
+            self._build_meal(meal_type, target, foods, rotation_offset + index)
+            for index, (meal_type, target) in enumerate(meal_targets.items())
+        ]
         notes = [
             "Recommendations are generated from available foods and macro targets.",
             "Adjust portions based on hunger, training schedule, and medical guidance.",
@@ -57,7 +64,13 @@ class MealRecommendationService:
             notes=notes,
         )
 
-    def _build_meal(self, meal_type: str, target: float, foods: list[Food]) -> MealBlock:
+    def _build_meal(
+        self,
+        meal_type: str,
+        target: float,
+        foods: list[Food],
+        rotation_offset: int = 0,
+    ) -> MealBlock:
         selected: list[Food] = []
         total = 0.0
         categories = self._preferred_categories(meal_type)
@@ -65,6 +78,9 @@ class MealRecommendationService:
             foods,
             key=lambda food: (food.category not in categories, abs(food.calories - target / 2)),
         )
+        if candidates:
+            shift = rotation_offset % len(candidates)
+            candidates = candidates[shift:] + candidates[:shift]
         for food in candidates:
             if len(selected) >= 3:
                 break

@@ -20,7 +20,7 @@ def list_meal_plans(
     return (
         db.query(MealPlan)
         .filter(MealPlan.user_id == current_user.id)
-        .order_by(MealPlan.plan_date.desc())
+        .order_by(MealPlan.plan_date.desc(), MealPlan.created_at.desc())
         .limit(30)
         .all()
     )
@@ -32,10 +32,14 @@ def generate_meal_plan(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> MealPlanRead:
-    recommendation = MealRecommendationService(db).recommend(payload.recommendation_request)
+    plan_date = payload.plan_date or date.today()
+    recommendation = MealRecommendationService(db).recommend(
+        payload.recommendation_request,
+        rotation_offset=plan_date.toordinal(),
+    )
     plan = MealPlan(
         user_id=current_user.id,
-        plan_date=payload.plan_date or date.today(),
+        plan_date=plan_date,
         daily_calories=recommendation.daily_calorie_target,
         plan_json=recommendation.model_dump(),
     )
@@ -55,10 +59,14 @@ def generate_weekly_meal_plan(
     created: list[MealPlan] = []
     for offset in range(7):
         request = payload.recommendation_request.model_copy(update={"days": 1})
-        recommendation = MealRecommendationService(db).recommend(request)
+        plan_date = start_date.fromordinal(start_date.toordinal() + offset)
+        recommendation = MealRecommendationService(db).recommend(
+            request,
+            rotation_offset=plan_date.toordinal(),
+        )
         plan = MealPlan(
             user_id=current_user.id,
-            plan_date=start_date.fromordinal(start_date.toordinal() + offset),
+            plan_date=plan_date,
             daily_calories=recommendation.daily_calorie_target,
             plan_json=recommendation.model_dump(),
         )

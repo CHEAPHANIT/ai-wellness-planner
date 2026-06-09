@@ -7,7 +7,7 @@ void main() {
   testWidgets('renders authentication screen', (tester) async {
     await tester.pumpWidget(NutriAIApp(apiClient: ApiClient()));
 
-    expect(find.text('NutriAI'), findsOneWidget);
-    expect(find.text('Sign in'), findsWidgets);
+    expect(find.text('Welcome to NutriAI'), findsOneWidget);
+    expect(find.text('Sign In'), findsWidgets);
   });
 }
