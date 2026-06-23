@@ -279,39 +279,329 @@ For Android, `localhost` refers to the emulator/device itself. Use the host addr
 
 ## How to Test the Complete System
 
-Start with one complete **happy-path** journey. Use a unique test email so existing data does not affect the result.
+This section is a user acceptance test: follow it from top to bottom as if you are a new user. It provides example values for every visible input. Use a new email each time, such as `nutriai.test.01@example.com`, so older records do not change the result.
 
-| Order | Action | Pass criteria |
+Record each step as **Pass** or **Fail**. If a step fails, save a screenshot, the displayed error, and the output of `docker compose logs --tail=100 backend`.
+
+### Step 0: Confirm that the system is ready
+
+1. Run `docker compose ps` in the project root.
+2. Open http://localhost:8000/health.
+3. Open http://localhost:8080.
+
+Expected result:
+
+- PostgreSQL is `healthy`, while the backend and frontend are `Up`.
+- The health page displays `{"status":"ok"}`.
+- The NutriAI **Sign In** screen opens without an error.
+
+### Step 1: Create a test account
+
+1. On the **Sign In** screen, choose the option to create an account.
+2. Enter the following values.
+
+| Input field | Test value |
+| --- | --- |
+| Full Name | `NutriAI Test User` |
+| Email Address | `nutriai.test.01@example.com` |
+| Password | `Password123` |
+| Confirm Password | `Password123` |
+
+3. Click **Create Account**.
+4. After the dashboard opens, go to **Settings** and click **Sign Out**.
+5. On **Sign In**, enter the same email and password, select **Remember me**, and click **Sign In**. This makes the later refresh checks meaningful.
+
+Expected result:
+
+- No validation error appears.
+- The account is created, the user is signed in automatically, and the dashboard opens.
+- Signing out and signing back in with **Remember me** succeeds.
+- If the email already exists, change `01` to another number and try again.
+
+### Step 2: Complete the health profile
+
+1. Open **Profile** or **Health Profile** from the navigation menu.
+2. Enter or select these values.
+
+| Input field | Test value |
+| --- | --- |
+| Age | `25` |
+| Gender | `Male` |
+| Height (cm) | `175` |
+| Weight (kg) | `75` |
+| Activity Level | `Moderate (3-5 days/week)` |
+| Exercise Frequency | `3-5 times/week` |
+| Goal | `Lose Weight` |
+| Dietary Preference | `High Protein` |
+| Eating Habits | `Regular (3 meals/day)` |
+| Health Conditions (Optional) | leave empty |
+
+3. Confirm that the BMI, BMR, and calorie cards update.
+4. Click **Save Profile**.
+5. Refresh the browser, return to the profile, and check the fields again.
+
+Expected result:
+
+- A successful-save message appears.
+- The BMI is approximately `24.49` and has a normal classification.
+- BMR and target calories are positive and reasonable, not blank, negative, or `NaN`.
+- Every entered value remains after refresh.
+
+### Step 3: Check the dashboard
+
+1. Open **Dashboard**.
+2. Review the calorie, nutrition, water, weight, and quick-action sections.
+
+Expected result:
+
+- The dashboard loads without a red error banner.
+- The profile-derived calorie target is displayed.
+- New-user food totals can be zero, but they must not be negative or `NaN`.
+- Selecting the **Meal Plan** quick action opens the Meal Planner.
+
+### Step 4: Add an allergy
+
+1. Open **Allergies**.
+2. Enter the following values.
+
+| Input field | Test value |
+| --- | --- |
+| Ingredient | `milk` |
+| Severity | `High` |
+
+3. Click **Add Allergy**.
+4. Refresh the browser and return to **Allergies**.
+
+Expected result:
+
+- `milk` appears under **Tracked Allergies** with high severity.
+- The allergy remains after refresh.
+- This allergy will later be used to test whether the AI recommendation avoids milk, cheese, and yogurt.
+
+### Step 5: Browse and search the food database
+
+1. Open **Foods**.
+2. In **Search foods...**, enter `rice`.
+3. Confirm that only relevant foods are displayed.
+4. Clear the search, choose one food, and click its favorite/heart control.
+5. If available, open the substitute action for a food such as rice.
+6. Leave the page and return.
+
+Expected result:
+
+- Seeded foods load and the search reacts to `rice`.
+- The selected favorite remains marked after returning.
+- The substitute dialog returns safe alternative foods and does not return an allergy-conflicting item.
+
+### Step 6: Generate a daily AI meal plan
+
+1. Open **Meal Planner**.
+2. Select **Daily Plan**.
+3. Choose today's date.
+4. In **Plan settings**, enter the values below. These fixed inputs make the AI result easier to evaluate.
+
+| Input field | Test value |
+| --- | --- |
+| Daily calories | `2200` |
+| Protein (g) | `130` |
+| Carbohydrates (g) | `240` |
+| Fat (g) | `70` |
+| Daily grocery budget estimate | `20` |
+| Allergies (comma separated) | `milk` |
+| Goal | `lose_weight` |
+| Preference | `high-protein` |
+
+5. Click **Generate Plan** and wait for the result.
+6. Inspect every food in breakfast, lunch, dinner, and snack.
+
+Expected result:
+
+- Four sections appear: breakfast, lunch, dinner, and snack.
+- Every section contains at least one food with calorie and macro information.
+- The total is reasonably close to the `2200` kcal target; an exact match is not required because the system uses fixed database servings.
+- No food name or allergen contains milk, cheese, or yogurt.
+- The page does not freeze or return a server error.
+
+This is the main AI acceptance test. A generated dairy item is a **Fail**, even if the rest of the plan looks correct.
+
+### Step 7: Generate a weekly AI meal plan
+
+1. Stay on **Meal Planner** and select **Weekly Plan**.
+2. Keep the same plan settings.
+3. Select a start date and click **Generate Plan**.
+
+Expected result:
+
+- Seven dated plans are displayed.
+- Each day contains breakfast, lunch, dinner, and snack data.
+- The plans contain some rotation instead of being accidentally stored as one duplicated database record.
+- The `milk` restriction applies to all seven days.
+
+### Step 8: Create and use a grocery list
+
+1. In **Meal Planner**, click **Export to Grocery**.
+2. Select the daily or weekly plans that were just generated.
+3. Confirm the export.
+4. Open **Grocery** from the navigation menu.
+5. Select the generated grocery list.
+6. Mark one item as purchased.
+7. Refresh the page.
+
+Expected result:
+
+- A grocery list is generated from the selected meal plan or plans.
+- It contains item names, quantities, and positive estimated costs.
+- The total estimated cost is positive.
+- The purchased item remains purchased after refresh.
+- If the estimate exceeds the test budget, the interface clearly shows the budget comparison rather than crashing.
+
+### Step 9: Log food and verify nutrition totals
+
+1. Open **Log Food**.
+2. Enter or select the values below.
+
+| Input field | Test value |
+| --- | --- |
+| Meal Type | `Lunch` |
+| Food Item | `Grilled Fish` or another available food |
+| Quantity | `1` |
+| Notes (Optional) | `Acceptance test meal` |
+
+3. Note the current calorie and macro totals.
+4. Click **Add to Log**.
+5. Find the new entry in today's food log.
+
+Expected result:
+
+- The entry appears with the selected food, meal type, quantity, and notes.
+- Today's calories, protein, carbohydrates, and fat increase according to the selected food.
+- After refreshing, the entry and updated totals remain.
+
+Now delete the same test entry.
+
+Expected result:
+
+- The entry disappears.
+- The daily totals return to their previous values.
+- Deleting it a second time is not possible through the interface.
+
+### Step 10: Record weight and water
+
+1. Open **Progress**.
+2. Under **Log Weight**, enter:
+
+| Input field | Test value |
+| --- | --- |
+| Weight (kg) | `74.5` |
+| Date | today's date in `YYYY-MM-DD` format |
+
+3. Click **Log Weight**.
+4. Under **Log Water Intake**, enter `500` in **Amount (ml)** or click the `500ml` preset.
+5. Click **Add Water**.
+6. Refresh the page.
+
+Expected result:
+
+- Current weight becomes `74.5 kg` and a history entry appears for the selected date.
+- Today's water increases by exactly `500 ml`.
+- The progress cards and charts update.
+- Weight and water values remain after refresh.
+
+### Step 11: Test the AI nutrition assistant
+
+1. Open **AI Assistant**.
+2. Enter this question in the message field:
+
+```text
+Suggest a high-protein breakfast for my weight-loss goal. Remember that I am allergic to milk.
+```
+
+3. Send the message.
+
+Expected result:
+
+- A nutrition-related answer appears without the page freezing.
+- The answer considers weight loss and the milk allergy.
+- It must not recommend milk, cheese, yogurt, or another dairy food. If it does, record this step as **Fail**.
+- A provider name or local-rule-based source may appear; either is acceptable.
+
+To test provider fallback, stop Ollama or use `AI_PROVIDER=local`, restart the backend, and ask again. The assistant should still return a local response.
+
+### Step 12: Test health-risk and image assistance
+
+1. In **AI Assistant**, click **Check health risk**.
+
+Expected result:
+
+- A risk level and BMI appear.
+- The result is presented as educational guidance, not a diagnosis.
+- A medical disclaimer is included in the result area or response.
+
+Next, click **Upload Food Photo** and choose an image with a generic filename such as `IMG_1234.jpg`.
+
+Expected result:
+
+- The system returns `Unknown Food` or explains that it cannot identify the image reliably.
+- It does not pretend that filename matching is trained visual recognition.
+- The upload does not crash the application.
+
+### Step 13: Test session and logout behavior
+
+1. Refresh the browser while signed in.
+2. Confirm that the account and saved records remain available.
+3. Open **Settings** and click **Sign Out**.
+4. Confirm that refreshing after logout does not reopen private screens.
+5. Sign in again with:
+
+| Input field | Test value |
+| --- | --- |
+| Email | `nutriai.test.01@example.com` |
+| Password | `Password123` |
+
+Expected result:
+
+- Signing out returns the user to the Sign In screen.
+- Private screens are no longer visible after logout.
+- **Remember me** preserves the valid session before logout, but logout removes it.
+- Signing in again succeeds and restores the profile, allergy, plans, grocery data, weight, and water records.
+
+### Negative-input checklist
+
+Run these after the complete happy path so deliberate failures do not interrupt the main test.
+
+| Test | Input or action | Expected result |
 | --- | --- | --- |
-| 1 | Open `/health` and the web app | Health returns `ok`; login screen loads |
-| 2 | Register and sign in | Account is created and dashboard opens |
-| 3 | Complete the profile and goal | Values remain after refreshing the browser |
-| 4 | Check the dashboard | BMI and calorie values are present and reasonable |
-| 5 | Add a `milk` allergy | Allergy remains after refresh |
-| 6 | Browse/search foods and favorite one | Search and favorite state work |
-| 7 | Generate a daily meal plan | Four meal sections appear with foods and nutrition |
-| 8 | Inspect the generated foods | No milk, cheese, or yogurt appears |
-| 9 | Generate a weekly plan | Seven dated plans are available |
-| 10 | Generate a grocery list | Items and positive estimated costs appear |
-| 11 | Mark an item purchased | Status remains after refresh |
-| 12 | Log a food | Daily calories and macros increase correctly |
-| 13 | Delete that food log | Totals decrease again |
-| 14 | Record water and weight | Progress updates and persists |
-| 15 | Ask the assistant a nutrition question | A relevant answer returns without freezing |
-| 16 | Run health-risk screening | A risk level and medical disclaimer appear |
-| 17 | Upload an unknown image | The result is low-confidence or `Unknown Food` |
-| 18 | Log out and sign in again | Protected screens close; saved data returns after login |
+| Duplicate registration | Register again with the same email | A clear duplicate-email error appears |
+| Short password | Use `1234567` | The form requires at least eight characters |
+| Password mismatch | Password `Password123`, confirmation `Password124` | The form says the passwords do not match |
+| Empty allergy | Leave Ingredient empty and click Add Allergy | No empty allergy is created |
+| Invalid food quantity | Enter `0` or `-1` | Input is rejected; nutrition totals do not change |
+| Invalid weight | Enter `0` or a negative value | Input is rejected and history does not change |
+| Invalid water | Enter a negative amount | Input is rejected and today's water does not decrease |
+| Impossible restrictions | Enter several allergies covering all available foods | A clear no-safe-food explanation appears; no crash occurs |
+| Unauthorized API | Call a protected endpoint in `/docs` without a token | The API returns `401 Unauthorized` |
+| Cross-user privacy | Create a second account and inspect its records | The first user's private records are not visible |
 
-Also test important failure cases:
+### Test record template
 
-- Duplicate email registration is rejected.
-- A password shorter than eight characters is rejected.
-- Protected APIs reject requests without a valid token.
-- Invalid food IDs return a clear error.
-- Negative or zero quantities are rejected.
-- One user cannot access another user's private records.
-- Impossible allergy/preference combinations return an explanation rather than crashing.
-- An unavailable Ollama or OpenAI server falls back safely.
+Copy this table into an issue, report, or spreadsheet while testing:
+
+| Step | Result | Actual result or problem | Evidence |
+| --- | --- | --- | --- |
+| 0. System ready | Pass / Fail |  | Screenshot/log |
+| 1. Registration | Pass / Fail |  | Screenshot/log |
+| 2. Profile | Pass / Fail |  | Screenshot/log |
+| 3. Dashboard | Pass / Fail |  | Screenshot/log |
+| 4. Allergy | Pass / Fail |  | Screenshot/log |
+| 5. Foods | Pass / Fail |  | Screenshot/log |
+| 6. Daily AI plan | Pass / Fail |  | Screenshot/log |
+| 7. Weekly AI plan | Pass / Fail |  | Screenshot/log |
+| 8. Grocery | Pass / Fail |  | Screenshot/log |
+| 9. Food log | Pass / Fail |  | Screenshot/log |
+| 10. Progress | Pass / Fail |  | Screenshot/log |
+| 11. AI assistant | Pass / Fail |  | Screenshot/log |
+| 12. Risk and image | Pass / Fail |  | Screenshot/log |
+| 13. Session/logout | Pass / Fail |  | Screenshot/log |
 
 ## Automated Tests
 
