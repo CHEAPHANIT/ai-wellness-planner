@@ -20,3 +20,4 @@ class Food(Base):
     allergens: Mapped[list[str]] = mapped_column(JSON, default=list)
 
     logs = relationship("FoodLog", back_populates="food")
+    favorites = relationship("FoodFavorite", back_populates="food", cascade="all, delete")

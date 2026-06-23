@@ -27,6 +27,7 @@ class GroceryItem(Base):
     food_item: Mapped[str] = mapped_column(String(160), nullable=False)
     quantity: Mapped[str] = mapped_column(String(80), nullable=False)
     estimated_cost: Mapped[float] = mapped_column(Float, default=0)
+    status: Mapped[str] = mapped_column(String(20), default="need_to_buy")
     purchased: Mapped[bool] = mapped_column(Boolean, default=False)
 
     grocery_list = relationship("GroceryList", back_populates="items")

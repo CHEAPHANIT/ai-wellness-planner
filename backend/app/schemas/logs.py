@@ -10,6 +10,7 @@ class FoodLogCreate(BaseModel):
     meal_type: str = Field(default="meal", max_length=40)
     quantity: float = Field(default=1, gt=0, le=20)
     notes: str | None = Field(default=None, max_length=255)
+    log_date: date | None = None
 
 
 class FoodLogRead(BaseModel):

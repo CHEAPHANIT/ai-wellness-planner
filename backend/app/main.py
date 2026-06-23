@@ -12,6 +12,7 @@ from app.models import (  # noqa: F401
     allergy,
     chatbot,
     food,
+    food_favorite,
     food_log,
     goal,
     grocery as grocery_model,

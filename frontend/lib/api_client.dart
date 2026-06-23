@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 
 class ApiException implements Exception {
   ApiException(this.message);
@@ -22,14 +23,30 @@ class ApiClient {
 
   final String baseUrl;
   String? _token;
+  static const _tokenKey = 'nutriai_access_token';
 
-  void clearToken() {
+  Future<void> clearToken() async {
     _token = null;
+    final preferences = await SharedPreferences.getInstance();
+    await preferences.remove(_tokenKey);
+  }
+
+  Future<bool> restoreToken() async {
+    final preferences = await SharedPreferences.getInstance();
+    _token = preferences.getString(_tokenKey);
+    if (_token == null) return false;
+    try {
+      await me();
+      return true;
+    } catch (_) {
+      await clearToken();
+      return false;
+    }
   }
 
   Future<Map<String, dynamic>> logout() async {
     final response = await _postJson('/api/auth/logout', {});
-    clearToken();
+    await clearToken();
     return response;
   }
 
@@ -48,16 +65,21 @@ class ApiClient {
     required String email,
     required String fullName,
     required String password,
+    bool rememberMe = false,
   }) async {
     await _postJson('/api/auth/register', {
       'email': email,
       'full_name': fullName,
       'password': password,
     });
-    await login(email: email, password: password);
+    await login(email: email, password: password, rememberMe: rememberMe);
   }
 
-  Future<void> login({required String email, required String password}) async {
+  Future<void> login({
+    required String email,
+    required String password,
+    bool rememberMe = false,
+  }) async {
     final response = await http.post(
       _uri('/api/auth/login'),
       headers: {'Content-Type': 'application/x-www-form-urlencoded'},
@@ -65,10 +87,23 @@ class ApiClient {
     );
     final data = _decode(response) as Map<String, dynamic>;
     _token = data['access_token'] as String;
+    final preferences = await SharedPreferences.getInstance();
+    if (rememberMe) {
+      await preferences.setString(_tokenKey, _token!);
+    } else {
+      await preferences.remove(_tokenKey);
+    }
   }
 
   Future<Map<String, dynamic>> me() async {
     return _getMap('/api/auth/me');
+  }
+
+  Future<Map<String, dynamic>> updateAccount({
+    required String email,
+    required String fullName,
+  }) {
+    return _putJson('/api/auth/me', {'email': email, 'full_name': fullName});
   }
 
   Future<Map<String, dynamic>> profile() async {
@@ -142,6 +177,28 @@ class ApiClient {
     return data.map((item) => Map<String, dynamic>.from(item as Map)).toList();
   }
 
+  Future<Set<int>> favoriteFoodIds() async {
+    final data = await _getMap('/api/foods/favorites');
+    final ids = data['food_ids'] as List<dynamic>? ?? [];
+    return ids.whereType<int>().toSet();
+  }
+
+  Future<Set<int>> addFavoriteFood(int foodId) async {
+    final data = await _postJson('/api/foods/$foodId/favorite', {});
+    final ids = data['food_ids'] as List<dynamic>? ?? [];
+    return ids.whereType<int>().toSet();
+  }
+
+  Future<Set<int>> removeFavoriteFood(int foodId) async {
+    final response = await http.delete(
+      _uri('/api/foods/$foodId/favorite'),
+      headers: _jsonHeaders,
+    );
+    final data = _decode(response) as Map<String, dynamic>;
+    final ids = data['food_ids'] as List<dynamic>? ?? [];
+    return ids.whereType<int>().toSet();
+  }
+
   Future<Map<String, dynamic>> createFood({
     required String name,
     required String category,
@@ -167,18 +224,24 @@ class ApiClient {
     required String mealType,
     required double quantity,
     String? notes,
+    String? logDate,
   }) async {
     return _postJson('/api/logs/food', {
       'food_id': foodId,
       'meal_type': mealType,
       'quantity': quantity,
       'notes': notes,
+      'log_date': logDate,
     });
   }
 
   Future<List<Map<String, dynamic>>> foodLogs() async {
     final data = await _get('/api/logs/food') as List<dynamic>;
     return data.map((item) => Map<String, dynamic>.from(item as Map)).toList();
+  }
+
+  Future<void> deleteFoodLog(int logId) async {
+    await _delete('/api/logs/food/$logId');
   }
 
   Future<Map<String, dynamic>> nutritionSummary(String date) async {
@@ -226,20 +289,24 @@ class ApiClient {
 
   Future<Map<String, dynamic>> generateGroceryList({
     int? mealPlanId,
+    List<int> mealPlanIds = const [],
     double? budget,
   }) {
     return _postJson('/api/grocery-lists/generate', {
       'meal_plan_id': mealPlanId,
+      'meal_plan_ids': mealPlanIds,
       'budget': budget,
     });
   }
 
   Future<Map<String, dynamic>> updateGroceryItem({
     required int itemId,
-    required bool purchased,
+    bool? purchased,
+    String? status,
   }) {
     return _patchJson('/api/grocery-lists/items/$itemId', {
       'purchased': purchased,
+      'status': status,
     });
   }
 
@@ -259,6 +326,11 @@ class ApiClient {
 
   Future<Map<String, dynamic>> waterLog(String date) {
     return _getMap('/api/water/$date');
+  }
+
+  Future<List<Map<String, dynamic>>> waterLogs({int days = 7}) async {
+    final data = await _get('/api/water?days=$days') as List<dynamic>;
+    return data.map((item) => Map<String, dynamic>.from(item as Map)).toList();
   }
 
   Future<Map<String, dynamic>> logWater(double amountMl, {String? logDate}) {

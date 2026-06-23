@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, timedelta
 
 from fastapi import APIRouter, Depends, status
 from sqlalchemy.orm import Session
@@ -10,6 +10,22 @@ from app.models.water import WaterLog
 from app.schemas.water import WaterLogCreate, WaterLogRead
 
 router = APIRouter(prefix="/water", tags=["water"])
+
+
+@router.get("", response_model=list[WaterLogRead])
+def list_water_logs(
+    days: int = 7,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> list[WaterLog]:
+    days = max(1, min(days, 31))
+    start_date = date.today() - timedelta(days=days - 1)
+    return (
+        db.query(WaterLog)
+        .filter(WaterLog.user_id == current_user.id, WaterLog.log_date >= start_date)
+        .order_by(WaterLog.log_date.asc())
+        .all()
+    )
 
 
 @router.get("/{log_date}", response_model=WaterLogRead)

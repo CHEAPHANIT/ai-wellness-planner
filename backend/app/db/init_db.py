@@ -194,6 +194,9 @@ def ensure_schema_compatibility(engine: Engine) -> None:
             "image_url": "VARCHAR(500)",
             "allergens": "JSON DEFAULT '[]'",
         },
+        "grocery_items": {
+            "status": "VARCHAR(20) DEFAULT 'need_to_buy'",
+        },
     }
     with engine.begin() as connection:
         for table_name, columns in migrations.items():

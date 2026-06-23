@@ -37,13 +37,17 @@ def generate_meal_plan(
         payload.recommendation_request,
         rotation_offset=plan_date.toordinal(),
     )
-    plan = MealPlan(
-        user_id=current_user.id,
-        plan_date=plan_date,
-        daily_calories=recommendation.daily_calorie_target,
-        plan_json=recommendation.model_dump(),
+    plan = (
+        db.query(MealPlan)
+        .filter(MealPlan.user_id == current_user.id, MealPlan.plan_date == plan_date)
+        .order_by(MealPlan.created_at.desc())
+        .first()
     )
-    db.add(plan)
+    if plan is None:
+        plan = MealPlan(user_id=current_user.id, plan_date=plan_date)
+        db.add(plan)
+    plan.daily_calories = recommendation.daily_calorie_target
+    plan.plan_json = recommendation.model_dump()
     db.commit()
     db.refresh(plan)
     return plan
@@ -64,13 +68,17 @@ def generate_weekly_meal_plan(
             request,
             rotation_offset=plan_date.toordinal(),
         )
-        plan = MealPlan(
-            user_id=current_user.id,
-            plan_date=plan_date,
-            daily_calories=recommendation.daily_calorie_target,
-            plan_json=recommendation.model_dump(),
+        plan = (
+            db.query(MealPlan)
+            .filter(MealPlan.user_id == current_user.id, MealPlan.plan_date == plan_date)
+            .order_by(MealPlan.created_at.desc())
+            .first()
         )
-        db.add(plan)
+        if plan is None:
+            plan = MealPlan(user_id=current_user.id, plan_date=plan_date)
+            db.add(plan)
+        plan.daily_calories = recommendation.daily_calorie_target
+        plan.plan_json = recommendation.model_dump()
         created.append(plan)
     db.commit()
     for plan in created:

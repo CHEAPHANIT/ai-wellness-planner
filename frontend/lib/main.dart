@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'api_client.dart';
 import 'screens.dart';
@@ -17,13 +18,45 @@ class NutriAIApp extends StatefulWidget {
 }
 
 class _NutriAIAppState extends State<NutriAIApp> {
-  bool _authenticated = false;
+  bool? _authenticated;
+  bool _darkMode = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _restoreSession();
+  }
+
+  Future<void> _restoreSession() async {
+    final preferences = await SharedPreferences.getInstance();
+    final authenticated = await widget.apiClient.restoreToken();
+    if (mounted) {
+      setState(() {
+        _authenticated = authenticated;
+        _darkMode = preferences.getBool('nutriai_dark_mode') ?? false;
+      });
+    }
+  }
+
+  Future<void> _setDarkMode(bool value) async {
+    final preferences = await SharedPreferences.getInstance();
+    await preferences.setBool('nutriai_dark_mode', value);
+    if (mounted) setState(() => _darkMode = value);
+  }
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'NutriAI',
       debugShowCheckedModeBanner: false,
+      themeMode: _darkMode ? ThemeMode.dark : ThemeMode.light,
+      darkTheme: ThemeData(
+        useMaterial3: true,
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: const Color(0xFF0F8B5F),
+          brightness: Brightness.dark,
+        ),
+      ),
       theme: ThemeData(
         useMaterial3: true,
         colorScheme: ColorScheme.fromSeed(
@@ -32,9 +65,9 @@ class _NutriAIAppState extends State<NutriAIApp> {
         ),
         scaffoldBackgroundColor: const Color(0xFFF2F6EF),
         textTheme: ThemeData.light().textTheme.apply(
-              bodyColor: const Color(0xFF17231F),
-              displayColor: const Color(0xFF17231F),
-            ),
+          bodyColor: const Color(0xFF17231F),
+          displayColor: const Color(0xFF17231F),
+        ),
         appBarTheme: const AppBarTheme(
           elevation: 0,
           centerTitle: false,
@@ -61,7 +94,9 @@ class _NutriAIAppState extends State<NutriAIApp> {
             backgroundColor: const Color(0xFF0F8B5F),
             foregroundColor: Colors.white,
             minimumSize: const Size(0, 46),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
+            ),
           ),
         ),
         outlinedButtonTheme: OutlinedButtonThemeData(
@@ -69,7 +104,9 @@ class _NutriAIAppState extends State<NutriAIApp> {
             foregroundColor: const Color(0xFF0C6B4B),
             minimumSize: const Size(0, 46),
             side: const BorderSide(color: Color(0xFF8BC7AA)),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
+            ),
           ),
         ),
         chipTheme: const ChipThemeData(
@@ -78,9 +115,13 @@ class _NutriAIAppState extends State<NutriAIApp> {
           labelStyle: TextStyle(color: Color(0xFF1B4C3A)),
         ),
       ),
-      home: _authenticated
+      home: _authenticated == null
+          ? const Scaffold(body: Center(child: CircularProgressIndicator()))
+          : _authenticated!
           ? MainShell(
               apiClient: widget.apiClient,
+              darkMode: _darkMode,
+              onDarkModeChanged: _setDarkMode,
               onLogout: () {
                 widget.apiClient.clearToken();
                 setState(() => _authenticated = false);

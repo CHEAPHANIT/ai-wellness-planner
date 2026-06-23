@@ -20,11 +20,12 @@ services:
     build:
       context: ./backend
     container_name: ai-meal-backend
+    env_file:
+      - ./backend/.env
     environment:
       DATABASE_URL: postgresql+psycopg://postgres:postgres@postgres:5432/ai_meal_planning
       SECRET_KEY: replace-with-a-long-random-secret
       BACKEND_CORS_ORIGINS: http://localhost:8080,http://localhost:5173,http://localhost:3000
-      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
     ports:
       - "8000:8000"
     depends_on:

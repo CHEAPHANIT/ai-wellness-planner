@@ -19,14 +19,13 @@ class CaloriePredictionService:
     }
 
     def predict(self, payload: CaloriePredictionRequest) -> CaloriePredictionResponse:
-        gender = payload.gender.lower()
-        if gender in {"male", "man"}:
+        if payload.gender == "male":
             bmr = 10 * payload.weight_kg + 6.25 * payload.height_cm - 5 * payload.age + 5
         else:
             bmr = 10 * payload.weight_kg + 6.25 * payload.height_cm - 5 * payload.age - 161
 
-        multiplier = self.activity_multipliers.get(payload.activity_level.lower(), 1.375)
-        adjustment = self.goal_adjustments.get(payload.goal.lower(), 0)
+        multiplier = self.activity_multipliers[payload.activity_level]
+        adjustment = self.goal_adjustments[payload.goal]
         maintenance = round(bmr * multiplier)
         calories = max(1200, round(maintenance + adjustment))
         bmi = payload.weight_kg / ((payload.height_cm / 100) ** 2)
@@ -36,7 +35,10 @@ class CaloriePredictionService:
             bmi=round(bmi, 2),
             bmi_status=self._bmi_status(bmi),
             maintenance_calories=maintenance,
-            explanation="Prediction uses BMI and a Mifflin-St Jeor BMR baseline with activity and goal adjustments.",
+            explanation=(
+                "Estimate uses the Mifflin-St Jeor BMR equation, the selected activity multiplier, "
+                "and a goal adjustment. Recalculate when weight or activity changes."
+            ),
         )
 
     def _bmi_status(self, bmi: float) -> str:

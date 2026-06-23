@@ -29,3 +29,4 @@ class User(Base):
     chatbot_messages = relationship("ChatbotMessage", back_populates="user", cascade="all, delete")
     allergies = relationship("Allergy", back_populates="user", cascade="all, delete")
     health_risk_predictions = relationship("HealthRiskPrediction", back_populates="user", cascade="all, delete")
+    food_favorites = relationship("FoodFavorite", back_populates="user", cascade="all, delete")

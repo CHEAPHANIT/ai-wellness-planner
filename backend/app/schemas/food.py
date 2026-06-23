@@ -18,3 +18,7 @@ class FoodRead(FoodCreate):
     id: int
 
     model_config = {"from_attributes": True}
+
+
+class FoodFavoriteIds(BaseModel):
+    food_ids: list[int]

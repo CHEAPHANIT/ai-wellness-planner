@@ -18,6 +18,7 @@ from app.schemas.auth import (
     Token,
     UserCreate,
     UserRead,
+    UserUpdate,
 )
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -60,6 +61,23 @@ def login(
 
 @router.get("/me", response_model=UserRead)
 def read_current_user(current_user: User = Depends(get_current_user)) -> UserRead:
+    return current_user
+
+
+@router.put("/me", response_model=UserRead)
+def update_current_user(
+    payload: UserUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> UserRead:
+    email = payload.email.lower()
+    existing = db.query(User).filter(User.email == email, User.id != current_user.id).first()
+    if existing is not None:
+        raise HTTPException(status_code=409, detail="Email is already registered")
+    current_user.email = email
+    current_user.full_name = payload.full_name.strip()
+    db.commit()
+    db.refresh(current_user)
     return current_user
 
 

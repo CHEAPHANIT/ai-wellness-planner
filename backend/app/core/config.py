@@ -17,7 +17,15 @@ class Settings(BaseSettings):
         default=r"http://(localhost|127\.0\.0\.1):\d+",
         alias="BACKEND_CORS_ORIGIN_REGEX",
     )
+    ai_provider: str = Field(default="auto", alias="AI_PROVIDER")
     openai_api_key: str | None = Field(default=None, alias="OPENAI_API_KEY")
+    openai_model: str = Field(default="gpt-4o-mini", alias="OPENAI_MODEL")
+    openai_base_url: str = Field(default="https://api.openai.com/v1", alias="OPENAI_BASE_URL")
+    ollama_base_url: str = Field(default="http://host.docker.internal:11434", alias="OLLAMA_BASE_URL")
+    ollama_model: str = Field(default="llama3.1:8b", alias="OLLAMA_MODEL")
+    ai_connect_timeout_seconds: float = Field(default=2.0, alias="AI_CONNECT_TIMEOUT_SECONDS", gt=0)
+    ai_response_timeout_seconds: float = Field(default=45.0, alias="AI_RESPONSE_TIMEOUT_SECONDS", gt=0)
+    app_timezone: str = Field(default="Asia/Bangkok", alias="APP_TIMEZONE")
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 

@@ -19,6 +19,11 @@ class UserRead(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class UserUpdate(BaseModel):
+    email: EmailStr
+    full_name: str = Field(min_length=2, max_length=160)
+
+
 class Token(BaseModel):
     access_token: str
     token_type: str = "bearer"

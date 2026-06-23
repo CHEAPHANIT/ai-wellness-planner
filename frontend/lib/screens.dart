@@ -1,11 +1,16 @@
+import 'dart:convert';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'api_client.dart';
+import 'grocery_pdf_export_stub.dart'
+    if (dart.library.html) 'grocery_pdf_export_web.dart'
+    as grocery_pdf_export;
 
 const _leaf = Color(0xFF0F8B5F);
 const _leafDark = Color(0xFF0C3B2E);
@@ -88,11 +93,13 @@ class _AuthScreenState extends State<AuthScreen> {
           email: _email.text.trim(),
           fullName: _name.text.trim(),
           password: _password.text,
+          rememberMe: _rememberMe,
         );
       } else {
         await widget.apiClient.login(
           email: _email.text.trim(),
           password: _password.text,
+          rememberMe: _rememberMe,
         );
       }
       widget.onAuthenticated();
@@ -121,6 +128,22 @@ class _AuthScreenState extends State<AuthScreen> {
         _confirmPassword.text = 'password123';
       }
     });
+  }
+
+  Future<void> _showPasswordResetDialog() async {
+    final changed = await showDialog<bool>(
+      context: context,
+      builder: (context) => _PasswordResetDialog(
+        apiClient: widget.apiClient,
+        initialEmail: _email.text.trim(),
+      ),
+    );
+    if (changed == true && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Password updated. Sign in again.')),
+      );
+      _password.clear();
+    }
   }
 
   @override
@@ -172,6 +195,7 @@ class _AuthScreenState extends State<AuthScreen> {
                       onPasswordVisibilityChanged: () {
                         setState(() => _showPassword = !_showPassword);
                       },
+                      onForgotPassword: _showPasswordResetDialog,
                       onRegisterChanged: (value) => _setRegisterMode(value),
                       onSubmit: _submit,
                     ),
@@ -485,6 +509,7 @@ class _AuthForm extends StatelessWidget {
     required this.password,
     required this.onRememberChanged,
     required this.onPasswordVisibilityChanged,
+    required this.onForgotPassword,
     required this.onRegisterChanged,
     required this.onSubmit,
   });
@@ -500,6 +525,7 @@ class _AuthForm extends StatelessWidget {
   final TextEditingController password;
   final ValueChanged<bool?> onRememberChanged;
   final VoidCallback onPasswordVisibilityChanged;
+  final VoidCallback onForgotPassword;
   final ValueChanged<bool> onRegisterChanged;
   final VoidCallback onSubmit;
 
@@ -622,7 +648,7 @@ class _AuthForm extends StatelessWidget {
                         ),
                         const Spacer(),
                         TextButton(
-                          onPressed: () {},
+                          onPressed: loading ? null : onForgotPassword,
                           style: TextButton.styleFrom(
                             foregroundColor: const Color(0xFF009A55),
                             padding: EdgeInsets.zero,
@@ -766,6 +792,176 @@ class _LoginField extends StatelessWidget {
               ),
             ),
           ),
+        ),
+      ],
+    );
+  }
+}
+
+class _PasswordResetDialog extends StatefulWidget {
+  const _PasswordResetDialog({
+    required this.apiClient,
+    required this.initialEmail,
+  });
+
+  final ApiClient apiClient;
+  final String initialEmail;
+
+  @override
+  State<_PasswordResetDialog> createState() => _PasswordResetDialogState();
+}
+
+class _PasswordResetDialogState extends State<_PasswordResetDialog> {
+  final _email = TextEditingController();
+  final _otp = TextEditingController();
+  final _newPassword = TextEditingController();
+  bool _loading = false;
+  bool _otpVerified = false;
+  String? _demoOtp;
+  String? _message;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _email.text = widget.initialEmail;
+  }
+
+  @override
+  void dispose() {
+    _email.dispose();
+    _otp.dispose();
+    _newPassword.dispose();
+    super.dispose();
+  }
+
+  Future<void> _requestOtp() async {
+    if (_email.text.trim().isEmpty) {
+      setState(() => _error = 'Email is required');
+      return;
+    }
+    await _run(() async {
+      final result = await widget.apiClient.forgotPassword(_email.text.trim());
+      _demoOtp = result['demo_otp']?.toString();
+      _otpVerified = false;
+      _message = _demoOtp == null
+          ? result['message']?.toString()
+          : 'Demo OTP: $_demoOtp';
+    });
+  }
+
+  Future<void> _verifyOtp() async {
+    if (_otp.text.trim().isEmpty) {
+      setState(() => _error = 'OTP is required');
+      return;
+    }
+    await _run(() async {
+      await widget.apiClient.verifyOtp(
+        email: _email.text.trim(),
+        otp: _otp.text.trim(),
+      );
+      _otpVerified = true;
+      _message = 'OTP verified. Enter a new password.';
+    });
+  }
+
+  Future<void> _changePassword() async {
+    if (!_otpVerified) {
+      setState(() => _error = 'Verify the OTP first');
+      return;
+    }
+    if (_newPassword.text.length < 8) {
+      setState(() => _error = 'Use at least 8 characters');
+      return;
+    }
+    await _run(() async {
+      await widget.apiClient.changePassword(
+        email: _email.text.trim(),
+        otp: _otp.text.trim(),
+        newPassword: _newPassword.text,
+      );
+      if (mounted) {
+        Navigator.of(context).pop(true);
+      }
+    });
+  }
+
+  Future<void> _run(Future<void> Function() action) async {
+    setState(() {
+      _loading = true;
+      _error = null;
+      _message = null;
+    });
+    try {
+      await action();
+    } catch (error) {
+      setState(() => _error = error.toString());
+    } finally {
+      if (mounted) {
+        setState(() => _loading = false);
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Reset password'),
+      content: SizedBox(
+        width: 420,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextFormField(
+              controller: _email,
+              keyboardType: TextInputType.emailAddress,
+              decoration: const InputDecoration(labelText: 'Email'),
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: TextFormField(
+                    controller: _otp,
+                    decoration: const InputDecoration(labelText: 'OTP'),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                OutlinedButton(
+                  onPressed: _loading ? null : _requestOtp,
+                  child: const Text('Send OTP'),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            TextFormField(
+              controller: _newPassword,
+              obscureText: true,
+              decoration: const InputDecoration(labelText: 'New password'),
+            ),
+            if (_message != null) ...[
+              const SizedBox(height: 12),
+              SuccessBanner(message: _message!),
+            ],
+            if (_error != null) ...[
+              const SizedBox(height: 12),
+              ErrorBanner(message: _error!),
+            ],
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: _loading ? null : () => Navigator.of(context).pop(false),
+          child: const Text('Cancel'),
+        ),
+        OutlinedButton(
+          onPressed: _loading ? null : _verifyOtp,
+          child: const Text('Verify OTP'),
+        ),
+        FilledButton(
+          onPressed: _loading ? null : _changePassword,
+          child: Text(_loading ? 'Working...' : 'Change password'),
         ),
       ],
     );
@@ -1237,10 +1433,18 @@ class MacroChip extends StatelessWidget {
 }
 
 class MainShell extends StatefulWidget {
-  const MainShell({super.key, required this.apiClient, required this.onLogout});
+  const MainShell({
+    super.key,
+    required this.apiClient,
+    required this.onLogout,
+    required this.darkMode,
+    required this.onDarkModeChanged,
+  });
 
   final ApiClient apiClient;
   final VoidCallback onLogout;
+  final bool darkMode;
+  final ValueChanged<bool> onDarkModeChanged;
 
   @override
   State<MainShell> createState() => _MainShellState();
@@ -1252,7 +1456,10 @@ class _MainShellState extends State<MainShell> {
   @override
   Widget build(BuildContext context) {
     final pages = [
-      DashboardScreen(apiClient: widget.apiClient),
+      DashboardScreen(
+        apiClient: widget.apiClient,
+        onNavigate: (index) => setState(() => _selectedIndex = index),
+      ),
       ProfileScreen(apiClient: widget.apiClient),
       FoodDatabaseScreen(apiClient: widget.apiClient),
       FoodLogScreen(apiClient: widget.apiClient),
@@ -1261,12 +1468,82 @@ class _MainShellState extends State<MainShell> {
       ProgressScreen(apiClient: widget.apiClient),
       AllergiesScreen(apiClient: widget.apiClient),
       AssistantScreen(apiClient: widget.apiClient),
-      SettingsScreen(apiClient: widget.apiClient, onLogout: widget.onLogout),
+      SettingsScreen(
+        apiClient: widget.apiClient,
+        onLogout: widget.onLogout,
+        darkMode: widget.darkMode,
+        onDarkModeChanged: widget.onDarkModeChanged,
+      ),
     ];
     return LayoutBuilder(
       builder: (context, constraints) {
         final compact = constraints.maxWidth < 760;
         return Scaffold(
+          drawer: compact
+              ? Drawer(
+                  child: SafeArea(
+                    child: NavigationDrawer(
+                      selectedIndex: _selectedIndex,
+                      onDestinationSelected: (value) {
+                        setState(() => _selectedIndex = value);
+                        Navigator.of(context).pop();
+                      },
+                      children: const [
+                        Padding(
+                          padding: EdgeInsets.fromLTRB(24, 20, 16, 12),
+                          child: Text(
+                            'NutriAI',
+                            style: TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                        ),
+                        NavigationDrawerDestination(
+                          icon: Icon(Icons.dashboard_outlined),
+                          label: Text('Dashboard'),
+                        ),
+                        NavigationDrawerDestination(
+                          icon: Icon(Icons.person_outline),
+                          label: Text('Profile'),
+                        ),
+                        NavigationDrawerDestination(
+                          icon: Icon(Icons.restaurant_menu),
+                          label: Text('Foods'),
+                        ),
+                        NavigationDrawerDestination(
+                          icon: Icon(Icons.fact_check_outlined),
+                          label: Text('Log Food'),
+                        ),
+                        NavigationDrawerDestination(
+                          icon: Icon(Icons.calendar_today_outlined),
+                          label: Text('Meal Planner'),
+                        ),
+                        NavigationDrawerDestination(
+                          icon: Icon(Icons.shopping_cart_outlined),
+                          label: Text('Grocery'),
+                        ),
+                        NavigationDrawerDestination(
+                          icon: Icon(Icons.show_chart),
+                          label: Text('Progress'),
+                        ),
+                        NavigationDrawerDestination(
+                          icon: Icon(Icons.health_and_safety_outlined),
+                          label: Text('Allergies'),
+                        ),
+                        NavigationDrawerDestination(
+                          icon: Icon(Icons.smart_toy_outlined),
+                          label: Text('AI Assistant'),
+                        ),
+                        NavigationDrawerDestination(
+                          icon: Icon(Icons.settings_outlined),
+                          label: Text('Settings'),
+                        ),
+                      ],
+                    ),
+                  ),
+                )
+              : null,
           appBar: compact
               ? AppBar(
                   title: const Row(
@@ -1289,7 +1566,7 @@ class _MainShellState extends State<MainShell> {
             children: [
               if (!compact)
                 SizedBox(
-                  width: 136,
+                  width: 190,
                   child: _DesktopSidebar(
                     selectedIndex: _selectedIndex,
                     onSelected: (value) =>
@@ -1308,55 +1585,6 @@ class _MainShellState extends State<MainShell> {
               ),
             ],
           ),
-          bottomNavigationBar: compact
-              ? NavigationBar(
-                  selectedIndex: _selectedIndex,
-                  onDestinationSelected: (value) =>
-                      setState(() => _selectedIndex = value),
-                  destinations: const [
-                    NavigationDestination(
-                      icon: Icon(Icons.dashboard_outlined),
-                      label: 'Dashboard',
-                    ),
-                    NavigationDestination(
-                      icon: Icon(Icons.person_outline),
-                      label: 'Profile',
-                    ),
-                    NavigationDestination(
-                      icon: Icon(Icons.restaurant_menu),
-                      label: 'Foods',
-                    ),
-                    NavigationDestination(
-                      icon: Icon(Icons.fact_check_outlined),
-                      label: 'Log',
-                    ),
-                    NavigationDestination(
-                      icon: Icon(Icons.calendar_today_outlined),
-                      label: 'Planner',
-                    ),
-                    NavigationDestination(
-                      icon: Icon(Icons.shopping_cart_outlined),
-                      label: 'Grocery',
-                    ),
-                    NavigationDestination(
-                      icon: Icon(Icons.show_chart),
-                      label: 'Progress',
-                    ),
-                    NavigationDestination(
-                      icon: Icon(Icons.health_and_safety_outlined),
-                      label: 'Allergies',
-                    ),
-                    NavigationDestination(
-                      icon: Icon(Icons.smart_toy_outlined),
-                      label: 'AI',
-                    ),
-                    NavigationDestination(
-                      icon: Icon(Icons.settings_outlined),
-                      label: 'Settings',
-                    ),
-                  ],
-                )
-              : null,
         );
       },
     );
@@ -1364,9 +1592,14 @@ class _MainShellState extends State<MainShell> {
 }
 
 class DashboardScreen extends StatefulWidget {
-  const DashboardScreen({super.key, required this.apiClient});
+  const DashboardScreen({
+    super.key,
+    required this.apiClient,
+    required this.onNavigate,
+  });
 
   final ApiClient apiClient;
+  final ValueChanged<int> onNavigate;
 
   @override
   State<DashboardScreen> createState() => _DashboardScreenState();
@@ -1383,6 +1616,21 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   Future<_DashboardData> _load() async {
     final profile = await widget.apiClient.profile();
+    final goal = await widget.apiClient.goal() ?? <String, dynamic>{};
+    if (_foodNumber(goal['daily_calorie_target']) <= 0 &&
+        profile['age'] != null &&
+        profile['height_cm'] != null &&
+        profile['weight_kg'] != null) {
+      final prediction = await widget.apiClient.predictCalories({
+        'age': profile['age'],
+        'gender': profile['gender'] ?? 'male',
+        'height_cm': profile['height_cm'],
+        'weight_kg': profile['weight_kg'],
+        'activity_level': profile['activity_level'] ?? 'moderate',
+        'goal': goal['goal_type'] ?? 'maintain',
+      });
+      goal['daily_calorie_target'] = prediction['recommended_daily_calories'];
+    }
     final foods = await widget.apiClient.foods();
     final summary = await widget.apiClient.nutritionSummary(todayIsoDate());
     final logs = await _withFallback(
@@ -1397,13 +1645,25 @@ class _DashboardScreenState extends State<DashboardScreen> {
       widget.apiClient.waterLog(todayIsoDate()),
       <String, dynamic>{},
     );
+    final now = DateTime.now();
+    final weeklySummaries = await Future.wait(
+      List.generate(7, (index) {
+        final day = now.subtract(Duration(days: 6 - index));
+        return _withFallback(
+          widget.apiClient.nutritionSummary(_isoDate(day)),
+          <String, dynamic>{'calories': 0},
+        );
+      }),
+    );
     return _DashboardData(
       profile: profile,
+      goal: goal,
       foods: foods,
       summary: summary,
       logs: logs,
       progress: progress,
       water: water,
+      weeklySummaries: weeklySummaries,
     );
   }
 
@@ -1436,6 +1696,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
         final carbs = _numValue(summary['carbs_g']);
         final fats = _numValue(summary['fat_g']);
         final water = _numValue(data.water['amount_ml']);
+        final calorieTarget = _numValue(
+          data.goal['daily_calorie_target'],
+          fallback: 2000,
+        );
+        final proteinTarget = _numValue(
+          data.goal['protein_target_g'],
+          fallback: 120,
+        );
+        final waterTarget = _numValue(
+          data.water['recommended_ml'],
+          fallback: 2500,
+        );
         final currentWeight = _numValue(
           data.progress['current_weight'] ?? data.profile['weight_kg'],
           fallback: 72.5,
@@ -1444,7 +1716,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
           data.progress['target_weight'] ?? data.profile['target_weight_kg'],
           fallback: 70,
         );
-        final weekly = _weeklyCalories(calories);
+        final weekly = data.weeklySummaries
+            .map((item) => _numValue(item['calories']))
+            .toList();
         return SingleChildScrollView(
           child: Padding(
             padding: const EdgeInsets.fromLTRB(32, 26, 32, 34),
@@ -1471,23 +1745,29 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     DashboardMetricCard(
                       icon: Icons.local_fire_department_outlined,
                       iconColor: const Color(0xFF16A05D),
-                      value: '${calories.round()} / 2000',
+                      value: '${calories.round()} / ${calorieTarget.round()}',
                       label: 'Calories',
-                      progress: (calories / 2000).clamp(0, 1),
+                      progress: calorieTarget <= 0
+                          ? 0
+                          : (calories / calorieTarget).clamp(0, 1),
                     ),
                     DashboardMetricCard(
                       icon: Icons.monitor_heart_outlined,
                       iconColor: const Color(0xFF2EB8F0),
-                      value: '${protein.round()} / 120g',
+                      value: '${protein.round()} / ${proteinTarget.round()}g',
                       label: 'Protein',
-                      progress: (protein / 120).clamp(0, 1),
+                      progress: proteinTarget <= 0
+                          ? 0
+                          : (protein / proteinTarget).clamp(0, 1),
                     ),
                     DashboardMetricCard(
                       icon: Icons.water_drop_outlined,
                       iconColor: const Color(0xFF2EB8F0),
-                      value: '${water.round()}ml / 2500ml',
+                      value: '${water.round()}ml / ${waterTarget.round()}ml',
                       label: 'Water Intake',
-                      progress: (water / 2500).clamp(0, 1),
+                      progress: waterTarget <= 0
+                          ? 0
+                          : (water / waterTarget).clamp(0, 1),
                     ),
                     DashboardWeightCard(
                       value: '${currentWeight.toStringAsFixed(1)} kg',
@@ -1510,9 +1790,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     final macros = DashboardPanel(
                       title: "Today's Macros",
                       child: MacrosPanel(
-                        protein: protein == 0 ? 120 : protein,
-                        carbs: carbs == 0 ? 200 : carbs,
-                        fats: fats == 0 ? 65 : fats,
+                        protein: protein,
+                        carbs: carbs,
+                        fats: fats,
                       ),
                     );
                     if (stacked) {
@@ -1536,7 +1816,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     final stacked = constraints.maxWidth < 820;
                     final quickActions = DashboardPanel(
                       title: 'Quick Actions',
-                      child: const QuickActionsGrid(),
+                      child: QuickActionsGrid(onNavigate: widget.onNavigate),
                     );
                     final recent = DashboardPanel(
                       title: 'Recent Food Logged',
@@ -1578,19 +1858,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
     return double.tryParse(value?.toString() ?? '') ?? fallback;
   }
-
-  List<double> _weeklyCalories(double today) {
-    final base = today > 0 ? today : 1800.0;
-    return [
-      base,
-      (base * 1.28).clamp(900, 2400).toDouble(),
-      (base * 0.72).clamp(900, 2400).toDouble(),
-      (base * 1.2).clamp(900, 2400).toDouble(),
-      (base * 1.05).clamp(900, 2400).toDouble(),
-      (base * 1.22).clamp(900, 2400).toDouble(),
-      (base * 1.3).clamp(900, 2400).toDouble(),
-    ];
-  }
 }
 
 class FoodDatabaseScreen extends StatefulWidget {
@@ -1607,6 +1874,7 @@ class _FoodDatabaseScreenState extends State<FoodDatabaseScreen> {
   List<Map<String, dynamic>> _foods = [];
   String _category = 'All Categories';
   bool _loading = true;
+  bool _favoritesOnly = false;
   String? _error;
   final Set<int> _favorites = {};
 
@@ -1626,8 +1894,12 @@ class _FoodDatabaseScreenState extends State<FoodDatabaseScreen> {
     setState(() => _loading = true);
     try {
       final foods = await widget.apiClient.foods();
+      final favorites = await widget.apiClient.favoriteFoodIds();
       setState(() {
         _foods = foods;
+        _favorites
+          ..clear()
+          ..addAll(favorites);
         _error = null;
       });
     } catch (error) {
@@ -1652,6 +1924,64 @@ class _FoodDatabaseScreenState extends State<FoodDatabaseScreen> {
     }
   }
 
+  Future<void> _showSubstitutes(String foodName) async {
+    await showDialog<void>(
+      context: context,
+      builder: (context) =>
+          _SubstitutesDialog(apiClient: widget.apiClient, foodName: foodName),
+    );
+  }
+
+  Future<void> _toggleFavorite(int id, String name) async {
+    final wasFavorite = _favorites.contains(id);
+    setState(() {
+      if (wasFavorite) {
+        _favorites.remove(id);
+      } else {
+        _favorites.add(id);
+      }
+    });
+    try {
+      final updated = wasFavorite
+          ? await widget.apiClient.removeFavoriteFood(id)
+          : await widget.apiClient.addFavoriteFood(id);
+      setState(() {
+        _favorites
+          ..clear()
+          ..addAll(updated);
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              wasFavorite
+                  ? '$name removed from favorites'
+                  : '$name added to favorites',
+            ),
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
+    } catch (error) {
+      setState(() {
+        if (wasFavorite) {
+          _favorites.add(id);
+        } else {
+          _favorites.remove(id);
+        }
+        _error = error.toString();
+      });
+    }
+  }
+
+  void _showAllFoods() {
+    setState(() {
+      _favoritesOnly = false;
+      _category = 'All Categories';
+      _search.clear();
+    });
+  }
+
   List<String> get _categories {
     final values =
         _foods
@@ -1673,7 +2003,10 @@ class _FoodDatabaseScreenState extends State<FoodDatabaseScreen> {
       final matchesCategory =
           _category == 'All Categories' ||
           food['category']?.toString() == _category;
-      return matchesSearch && matchesCategory;
+      final id = food['id'];
+      final matchesFavorite =
+          !_favoritesOnly || (id is int && _favorites.contains(id));
+      return matchesSearch && matchesCategory && matchesFavorite;
     }).toList();
   }
 
@@ -1695,11 +2028,32 @@ class _FoodDatabaseScreenState extends State<FoodDatabaseScreen> {
               categories: _categories,
               selectedCategory: _category,
               compact: compact,
+              favoritesOnly: _favoritesOnly,
+              favoritesCount: _favorites.length,
               onSearchChanged: (_) => setState(() {}),
               onCategoryChanged: (value) =>
                   setState(() => _category = value ?? 'All Categories'),
+              onFavoritesOnlyChanged: () {
+                if (_favoritesOnly) {
+                  _showAllFoods();
+                } else {
+                  setState(() => _favoritesOnly = true);
+                }
+              },
               onAddFood: _showAddFoodDialog,
             ),
+            if (_favoritesOnly ||
+                _category != 'All Categories' ||
+                _search.text.trim().isNotEmpty) ...[
+              const SizedBox(height: 12),
+              _FoodFilterStatusBar(
+                favoritesOnly: _favoritesOnly,
+                category: _category,
+                searchText: _search.text.trim(),
+                visibleCount: _visibleFoods.length,
+                onShowAll: _showAllFoods,
+              ),
+            ],
             const SizedBox(height: 24),
             if (_loading)
               const SizedBox(
@@ -1714,12 +2068,13 @@ class _FoodDatabaseScreenState extends State<FoodDatabaseScreen> {
               _FoodDatabaseGrid(
                 foods: _visibleFoods,
                 favorites: _favorites,
+                onSubstitutes: _showSubstitutes,
                 onFavorite: (id) {
-                  setState(() {
-                    if (!_favorites.add(id)) {
-                      _favorites.remove(id);
-                    }
-                  });
+                  final food = _foods.firstWhere(
+                    (item) => item['id'] == id,
+                    orElse: () => {'name': 'Food'},
+                  );
+                  _toggleFavorite(id, food['name']?.toString() ?? 'Food');
                 },
               ),
           ],
@@ -1735,8 +2090,11 @@ class _FoodDatabaseHeader extends StatelessWidget {
     required this.categories,
     required this.selectedCategory,
     required this.compact,
+    required this.favoritesOnly,
+    required this.favoritesCount,
     required this.onSearchChanged,
     required this.onCategoryChanged,
+    required this.onFavoritesOnlyChanged,
     required this.onAddFood,
   });
 
@@ -1744,8 +2102,11 @@ class _FoodDatabaseHeader extends StatelessWidget {
   final List<String> categories;
   final String selectedCategory;
   final bool compact;
+  final bool favoritesOnly;
+  final int favoritesCount;
   final ValueChanged<String> onSearchChanged;
   final ValueChanged<String?> onCategoryChanged;
+  final VoidCallback onFavoritesOnlyChanged;
   final VoidCallback onAddFood;
 
   @override
@@ -1835,6 +2196,39 @@ class _FoodDatabaseHeader extends StatelessWidget {
         label: const Text('Add Food'),
       ),
     );
+    final favoritesButton = SizedBox(
+      width: compact ? double.infinity : 146,
+      height: 50,
+      child: OutlinedButton.icon(
+        onPressed: onFavoritesOnlyChanged,
+        icon: Icon(
+          favoritesOnly ? Icons.close : Icons.favorite_border,
+          size: 18,
+        ),
+        label: Text(
+          favoritesOnly
+              ? 'Show All'
+              : favoritesCount > 0
+              ? 'Favorites ($favoritesCount)'
+              : 'Favorites',
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+        style: OutlinedButton.styleFrom(
+          backgroundColor: favoritesOnly
+              ? const Color(0xFFFFEDF2)
+              : Colors.white,
+          foregroundColor: favoritesOnly
+              ? const Color(0xFFE11D48)
+              : const Color(0xFF344054),
+          side: BorderSide(
+            color: favoritesOnly
+                ? const Color(0xFFFFB5C8)
+                : const Color(0xFFC9D5CF),
+          ),
+        ),
+      ),
+    );
 
     if (compact) {
       return Column(
@@ -1845,6 +2239,8 @@ class _FoodDatabaseHeader extends StatelessWidget {
           searchBox,
           const SizedBox(height: 12),
           categoryBox,
+          const SizedBox(height: 12),
+          favoritesButton,
           const SizedBox(height: 12),
           addButton,
         ],
@@ -1859,6 +2255,8 @@ class _FoodDatabaseHeader extends StatelessWidget {
         Flexible(flex: 7, child: searchBox),
         const SizedBox(width: 14),
         categoryBox,
+        const SizedBox(width: 14),
+        favoritesButton,
         const SizedBox(width: 22),
         addButton,
       ],
@@ -1873,16 +2271,84 @@ class _FoodDatabaseHeader extends StatelessWidget {
   }
 }
 
+class _FoodFilterStatusBar extends StatelessWidget {
+  const _FoodFilterStatusBar({
+    required this.favoritesOnly,
+    required this.category,
+    required this.searchText,
+    required this.visibleCount,
+    required this.onShowAll,
+  });
+
+  final bool favoritesOnly;
+  final String category;
+  final String searchText;
+  final int visibleCount;
+  final VoidCallback onShowAll;
+
+  @override
+  Widget build(BuildContext context) {
+    final filters = <String>[
+      if (favoritesOnly) 'Favorites',
+      if (category != 'All Categories') _titleCase(category),
+      if (searchText.isNotEmpty) '"$searchText"',
+    ];
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: const Color(0xFFEFF8F3),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: const Color(0xFFCFE4D6)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        child: Row(
+          children: [
+            Icon(
+              favoritesOnly ? Icons.favorite : Icons.filter_alt_outlined,
+              color: favoritesOnly ? const Color(0xFFE11D48) : _leaf,
+              size: 18,
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                'Showing $visibleCount food${visibleCount == 1 ? '' : 's'} for ${filters.join(' + ')}',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: Color(0xFF344054),
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+            TextButton.icon(
+              onPressed: onShowAll,
+              icon: const Icon(Icons.list_alt, size: 16),
+              label: const Text('Show all foods'),
+              style: TextButton.styleFrom(
+                foregroundColor: _leaf,
+                visualDensity: VisualDensity.compact,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _FoodDatabaseGrid extends StatelessWidget {
   const _FoodDatabaseGrid({
     required this.foods,
     required this.favorites,
     required this.onFavorite,
+    required this.onSubstitutes,
   });
 
   final List<Map<String, dynamic>> foods;
   final Set<int> favorites;
   final ValueChanged<int> onFavorite;
+  final ValueChanged<String> onSubstitutes;
 
   @override
   Widget build(BuildContext context) {
@@ -1907,6 +2373,8 @@ class _FoodDatabaseGrid extends StatelessWidget {
                 food: food,
                 favorite: favorites.contains(id),
                 onFavorite: () => onFavorite(id),
+                onSubstitutes: () =>
+                    onSubstitutes(food['name']?.toString() ?? 'food'),
               ),
             );
           }).toList(),
@@ -1921,11 +2389,13 @@ class _FoodDatabaseCard extends StatelessWidget {
     required this.food,
     required this.favorite,
     required this.onFavorite,
+    required this.onSubstitutes,
   });
 
   final Map<String, dynamic> food;
   final bool favorite;
   final VoidCallback onFavorite;
+  final VoidCallback onSubstitutes;
 
   @override
   Widget build(BuildContext context) {
@@ -1935,7 +2405,22 @@ class _FoodDatabaseCard extends StatelessWidget {
     final protein = _foodNumber(food['protein_g']);
     final carbs = _foodNumber(food['carbs_g']);
     final fat = _foodNumber(food['fat_g']);
-    return _DashboardCard(
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: favorite ? const Color(0xFFFFFBFC) : Colors.white,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+          color: favorite ? const Color(0xFFFFAFC3) : const Color(0xFFD9E5DE),
+          width: favorite ? 1.4 : 1,
+        ),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x120C3B2E),
+            blurRadius: 16,
+            offset: Offset(0, 8),
+          ),
+        ],
+      ),
       child: Padding(
         padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
         child: Column(
@@ -2049,6 +2534,21 @@ class _FoodDatabaseCard extends StatelessWidget {
                   ),
                 ),
                 IconButton(
+                  tooltip: 'Find substitutes',
+                  visualDensity: VisualDensity.compact,
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints.tightFor(
+                    width: 28,
+                    height: 28,
+                  ),
+                  onPressed: onSubstitutes,
+                  icon: const Icon(
+                    Icons.swap_horiz,
+                    color: Color(0xFF62716A),
+                    size: 20,
+                  ),
+                ),
+                IconButton(
                   tooltip: favorite ? 'Remove favorite' : 'Add favorite',
                   visualDensity: VisualDensity.compact,
                   padding: EdgeInsets.zero,
@@ -2060,7 +2560,7 @@ class _FoodDatabaseCard extends StatelessWidget {
                   icon: Icon(
                     favorite ? Icons.favorite : Icons.favorite_border,
                     color: favorite
-                        ? const Color(0xFF62716A)
+                        ? const Color(0xFFE11D48)
                         : const Color(0xFF62716A),
                     size: 20,
                   ),
@@ -2194,6 +2694,83 @@ class _EmptyFoodsView extends StatelessWidget {
   }
 }
 
+class _SubstitutesDialog extends StatefulWidget {
+  const _SubstitutesDialog({required this.apiClient, required this.foodName});
+
+  final ApiClient apiClient;
+  final String foodName;
+
+  @override
+  State<_SubstitutesDialog> createState() => _SubstitutesDialogState();
+}
+
+class _SubstitutesDialogState extends State<_SubstitutesDialog> {
+  bool _loading = true;
+  String? _error;
+  List<String> _alternatives = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      final result = await widget.apiClient.substitutes(widget.foodName);
+      final alternatives = result['alternatives'] as List<dynamic>? ?? [];
+      setState(() {
+        _alternatives = alternatives.map((item) => item.toString()).toList();
+      });
+    } catch (error) {
+      setState(() => _error = error.toString());
+    } finally {
+      if (mounted) {
+        setState(() => _loading = false);
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Text('Substitutes for ${widget.foodName}'),
+      content: SizedBox(
+        width: 360,
+        child: _loading
+            ? const SizedBox(
+                height: 120,
+                child: Center(child: CircularProgressIndicator()),
+              )
+            : _error != null
+            ? ErrorBanner(message: _error!)
+            : Column(
+                mainAxisSize: MainAxisSize.min,
+                children: _alternatives
+                    .map(
+                      (item) => ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        leading: const Icon(Icons.check_circle_outline),
+                        title: Text(item),
+                      ),
+                    )
+                    .toList(),
+              ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Close'),
+        ),
+      ],
+    );
+  }
+}
+
 class _AddFoodDialog extends StatefulWidget {
   const _AddFoodDialog({required this.apiClient});
 
@@ -2214,6 +2791,8 @@ class _AddFoodDialogState extends State<_AddFoodDialog> {
   String _category = 'meal';
   String? _imageName;
   bool _saving = false;
+  bool _recognizing = false;
+  Map<String, dynamic>? _recognition;
   String? _error;
 
   @override
@@ -2260,12 +2839,49 @@ class _AddFoodDialogState extends State<_AddFoodDialog> {
   Future<void> _pickImage() async {
     final result = await FilePicker.pickFiles(
       type: FileType.image,
-      withData: false,
+      withData: true,
     );
     if (result == null) {
       return;
     }
-    setState(() => _imageName = result.files.single.name);
+    final file = result.files.single;
+    final bytes = file.bytes;
+    if (bytes == null) {
+      setState(() {
+        _imageName = file.name;
+        _error = 'Could not read image bytes';
+      });
+      return;
+    }
+    setState(() {
+      _imageName = file.name;
+      _recognizing = true;
+      _recognition = null;
+      _error = null;
+    });
+    try {
+      final result = await widget.apiClient.recognizeFoodImage(
+        bytes: bytes,
+        filename: file.name,
+      );
+      final predictedName = result['food_name']?.toString() ?? '';
+      final calories = _foodNumber(result['estimated_calories']);
+      setState(() {
+        _recognition = result;
+        if (_name.text.trim().isEmpty && predictedName.isNotEmpty) {
+          _name.text = predictedName;
+        }
+        if (_calories.text.trim().isEmpty && calories > 0) {
+          _calories.text = _formatFoodNumber(calories);
+        }
+      });
+    } catch (error) {
+      setState(() => _error = error.toString());
+    } finally {
+      if (mounted) {
+        setState(() => _recognizing = false);
+      }
+    }
   }
 
   @override
@@ -2320,9 +2936,15 @@ class _AddFoodDialogState extends State<_AddFoodDialog> {
                           ),
                           const SizedBox(height: 24),
                           _UploadFoodImageBox(
-                            imageName: _imageName,
-                            onTap: _saving ? null : _pickImage,
+                            imageName: _recognizing
+                                ? 'Recognizing image...'
+                                : _imageName,
+                            onTap: _saving || _recognizing ? null : _pickImage,
                           ),
+                          if (_recognition != null) ...[
+                            const SizedBox(height: 12),
+                            _ImageRecognitionResult(data: _recognition!),
+                          ],
                           if (_error != null) ...[
                             const SizedBox(height: 14),
                             ErrorBanner(message: _error!),
@@ -2874,6 +3496,51 @@ class _UploadFoodImageBox extends StatelessWidget {
   }
 }
 
+class _ImageRecognitionResult extends StatelessWidget {
+  const _ImageRecognitionResult({required this.data});
+
+  final Map<String, dynamic> data;
+
+  @override
+  Widget build(BuildContext context) {
+    final foodName = data['food_name']?.toString() ?? 'Food';
+    final calories = _foodNumber(data['estimated_calories']);
+    final confidence = _foodNumber(data['confidence']);
+    final method = data['method']?.toString() ?? 'fallback';
+    final unknown = confidence <= 0 || foodName == 'Unknown Food';
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: const Color(0xFFE7F5EA),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: const Color(0xFFCFE4D6)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Row(
+          children: [
+            const Icon(Icons.image_search, color: _leaf),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                unknown
+                    ? 'No reliable food match. Enter the food manually.'
+                    : '$foodName • ${_formatFoodNumber(calories)} kcal per saved serving • ${_formatFoodNumber(confidence * 100)}% • $method',
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: Color(0xFF1B4C3A),
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _FoodDialogLabel extends StatelessWidget {
   const _FoodDialogLabel(this.text);
 
@@ -2912,7 +3579,7 @@ class _DashboardMetricGrid extends StatelessWidget {
           spacing: gap,
           runSpacing: gap,
           children: children
-              .map((child) => SizedBox(width: width, height: 134, child: child))
+              .map((child) => SizedBox(width: width, height: 154, child: child))
               .toList(),
         );
       },
@@ -3860,29 +4527,40 @@ class MacroLegendRow extends StatelessWidget {
 }
 
 class QuickActionsGrid extends StatelessWidget {
-  const QuickActionsGrid({super.key});
+  const QuickActionsGrid({super.key, required this.onNavigate});
+
+  final ValueChanged<int> onNavigate;
 
   @override
   Widget build(BuildContext context) {
     const actions = [
-      _QuickAction(Icons.restaurant_menu, 'Log Food', Color(0xFFEFFAF4), _leaf),
+      _QuickAction(
+        Icons.restaurant_menu,
+        'Log Food',
+        Color(0xFFEFFAF4),
+        _leaf,
+        3,
+      ),
       _QuickAction(
         Icons.calendar_today_outlined,
         'Meal Plan',
         Color(0xFFF0FAFF),
         _blue,
+        4,
       ),
       _QuickAction(
         Icons.trending_up,
         'Track Progress',
         Color(0xFFFFF8EF),
         _amber,
+        6,
       ),
       _QuickAction(
         Icons.spa_outlined,
         'AI Assistant',
         Color(0xFFEFFAF4),
         _leaf,
+        8,
       ),
     ];
     return LayoutBuilder(
@@ -3898,28 +4576,32 @@ class QuickActionsGrid extends StatelessWidget {
                 (action) => SizedBox(
                   width: width,
                   height: 100,
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      color: action.background,
-                      border: Border.all(
-                        color: action.color.withValues(alpha: 0.22),
-                      ),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(action.icon, color: action.color, size: 21),
-                        const SizedBox(height: 10),
-                        Text(
-                          action.label,
-                          style: const TextStyle(
-                            color: Color(0xFF111827),
-                            fontWeight: FontWeight.w900,
-                            fontSize: 12,
-                          ),
+                  child: InkWell(
+                    onTap: () => onNavigate(action.destination),
+                    borderRadius: BorderRadius.circular(8),
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        color: action.background,
+                        border: Border.all(
+                          color: action.color.withValues(alpha: 0.22),
                         ),
-                      ],
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(action.icon, color: action.color, size: 21),
+                          const SizedBox(height: 10),
+                          Text(
+                            action.label,
+                            style: const TextStyle(
+                              color: Color(0xFF111827),
+                              fontWeight: FontWeight.w900,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ),
@@ -3932,12 +4614,19 @@ class QuickActionsGrid extends StatelessWidget {
 }
 
 class _QuickAction {
-  const _QuickAction(this.icon, this.label, this.background, this.color);
+  const _QuickAction(
+    this.icon,
+    this.label,
+    this.background,
+    this.color,
+    this.destination,
+  );
 
   final IconData icon;
   final String label;
   final Color background;
   final Color color;
+  final int destination;
 }
 
 class RecentFoodLogged extends StatelessWidget {
@@ -4203,6 +4892,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
     try {
       final profile = await widget.apiClient.profile();
       final goal = await widget.apiClient.goal();
+      _setNumberText(_age, profile['age']);
+      _setNumberText(_height, profile['height_cm']);
+      _setNumberText(_weight, profile['weight_kg']);
+      _conditions.text = profile['health_conditions']?.toString() ?? '';
       _gender = profile['gender']?.toString() ?? _gender;
       _activity = profile['activity_level']?.toString() ?? _activity;
       _preference = profile['food_preference']?.toString() ?? _preference;
@@ -4210,6 +4903,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
       _habits = profile['eating_habits']?.toString() ?? _habits;
       if (goal != null) {
         _goal = goal['goal_type']?.toString() ?? _goal;
+        _setNumberText(_targetWeight, goal['target_weight_kg']);
+        _setNumberText(_protein, goal['protein_target_g']);
+        _setNumberText(_carbs, goal['carbs_target_g']);
+        _setNumberText(_fat, goal['fat_target_g']);
       }
     } catch (error) {
       _error = error.toString();
@@ -4234,12 +4931,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
           'weight_kg': double.tryParse(_weight.text) ?? 72.5,
           'activity_level': _activity,
           'food_preference': _preference,
+          'dietary_preference': _preference,
+          'health_conditions': _conditions.text.trim().isEmpty
+              ? null
+              : _conditions.text.trim(),
           'exercise_frequency': _exercise,
           'eating_habits': _habits,
         },
         goal: {
           'goal_type': _goal,
           'target_weight_kg': double.tryParse(_targetWeight.text) ?? 70,
+          'daily_calorie_target': _targetCalories.round(),
           'protein_target_g': double.tryParse(_protein.text) ?? 120,
           'carbs_target_g': double.tryParse(_carbs.text) ?? 200,
           'fat_target_g': double.tryParse(_fat.text) ?? 65,
@@ -4250,7 +4952,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
       }
       setState(() {
         _loading = false;
-        _clearTextInputs();
       });
       await showDialog<void>(
         context: context,
@@ -4270,15 +4971,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
-  void _clearTextInputs() {
-    _age.clear();
-    _height.clear();
-    _weight.clear();
-    _targetWeight.clear();
-    _protein.clear();
-    _carbs.clear();
-    _fat.clear();
-    _conditions.clear();
+  void _setNumberText(TextEditingController controller, dynamic value) {
+    final number = _foodNumber(value);
+    if (number > 0) {
+      controller.text = _formatFoodNumber(number);
+    }
   }
 
   @override
@@ -4852,7 +5549,7 @@ class ProfileInsightColumn extends StatelessWidget {
           value: targetCalories.round().toString(),
           unit: 'calories/day',
           color: const Color(0xFFFF7417),
-          note: 'Based on your activity level and goal to lose weight',
+          note: 'Based on your activity level and selected health goal',
         ),
       ],
     );
@@ -5149,8 +5846,8 @@ class _PlannerScreenState extends State<PlannerScreen> {
   final _fat = TextEditingController(text: '70');
   final _allergies = TextEditingController();
   final _budget = TextEditingController(text: '35');
-  final String _goal = 'maintain';
-  final String _preference = 'high-protein';
+  String _goal = 'maintain';
+  String _preference = 'high-protein';
   bool _loading = false;
   bool _weeklyPlan = false;
   String? _error;
@@ -5161,7 +5858,7 @@ class _PlannerScreenState extends State<PlannerScreen> {
   @override
   void initState() {
     super.initState();
-    _loadSavedMealPlans();
+    _loadPlannerContext();
   }
 
   @override
@@ -5195,14 +5892,51 @@ class _PlannerScreenState extends State<PlannerScreen> {
       if (plan['plan_date'] != null) plan['plan_date'].toString(): plan,
   };
 
-  Future<void> _loadSavedMealPlans() async {
+  Future<void> _loadPlannerContext() async {
     try {
       final plans = await widget.apiClient.mealPlans();
-      if (mounted) {
-        setState(() => _savedPlans = plans);
+      final profile = await widget.apiClient.profile();
+      final goal = await widget.apiClient.goal() ?? <String, dynamic>{};
+      final allergies = await widget.apiClient.allergies();
+      var calories = _foodNumber(goal['daily_calorie_target']);
+      if (calories <= 0 &&
+          profile['age'] != null &&
+          profile['height_cm'] != null &&
+          profile['weight_kg'] != null) {
+        final prediction = await widget.apiClient.predictCalories({
+          'age': profile['age'],
+          'gender': profile['gender'] ?? 'male',
+          'height_cm': profile['height_cm'],
+          'weight_kg': profile['weight_kg'],
+          'activity_level': profile['activity_level'] ?? 'moderate',
+          'goal': goal['goal_type'] ?? 'maintain',
+        });
+        calories = _foodNumber(prediction['recommended_daily_calories']);
       }
-    } catch (_) {
-      // The planner can still render generated-on-demand results.
+      if (!mounted) return;
+      setState(() {
+        _savedPlans = plans;
+        if (calories > 0) _calories.text = calories.round().toString();
+        if (goal['protein_target_g'] != null) {
+          _protein.text = _formatFoodNumber(
+            _foodNumber(goal['protein_target_g']),
+          );
+        }
+        if (goal['carbs_target_g'] != null) {
+          _carbs.text = _formatFoodNumber(_foodNumber(goal['carbs_target_g']));
+        }
+        if (goal['fat_target_g'] != null) {
+          _fat.text = _formatFoodNumber(_foodNumber(goal['fat_target_g']));
+        }
+        _goal = goal['goal_type']?.toString() ?? _goal;
+        _preference = profile['food_preference']?.toString() ?? _preference;
+        _allergies.text = allergies
+            .map((item) => item['ingredient']?.toString() ?? '')
+            .where((item) => item.isNotEmpty)
+            .join(', ');
+      });
+    } catch (error) {
+      if (mounted) setState(() => _error = error.toString());
     }
   }
 
@@ -5227,15 +5961,42 @@ class _PlannerScreenState extends State<PlannerScreen> {
   }
 
   Future<void> _generateGroceries() async {
+    final plansByDate = _plansByDate;
+    final exportDays = _weeklyPlan
+        ? _weeklyPlannerDays(_weekStartDate(_selectedDate), plansByDate)
+        : [
+            _PlannerWeekDay(
+              name: _plannerDateLabel(_selectedDate, false),
+              date: _selectedDate,
+              planId: plansByDate[_isoDate(_selectedDate)]?['id'] as int?,
+              meals: _plannerMealsFromPlan(
+                plansByDate[_isoDate(_selectedDate)],
+              ),
+            ),
+          ];
+    final selectedIds = await showDialog<List<int>>(
+      context: context,
+      builder: (context) => _GroceryExportDialog(days: exportDays),
+    );
+    if (selectedIds == null || selectedIds.isEmpty) {
+      return;
+    }
     setState(() {
       _loading = true;
       _error = null;
     });
     try {
       final result = await widget.apiClient.generateGroceryList(
-        budget: double.tryParse(_budget.text),
+        mealPlanIds: selectedIds,
+        budget: (double.tryParse(_budget.text) ?? 0) * selectedIds.length,
       );
       setState(() => _groceryList = result);
+      if (mounted) {
+        await showDialog<void>(
+          context: context,
+          builder: (context) => _GroceryExportResultDialog(data: result),
+        );
+      }
     } catch (error) {
       setState(() => _error = error.toString());
     } finally {
@@ -5269,41 +6030,6 @@ class _PlannerScreenState extends State<PlannerScreen> {
     }
   }
 
-  Future<void> _ensurePlanForSelection({bool force = false}) async {
-    final plansByDate = _plansByDate;
-    if (!force && _weeklyPlan) {
-      final weekStart = _weekStartDate(_selectedDate);
-      final hasFullWeek = List.generate(7, (offset) {
-        return _isoDate(weekStart.add(Duration(days: offset)));
-      }).every(plansByDate.containsKey);
-      if (hasFullWeek) {
-        return;
-      }
-    } else if (!force && plansByDate.containsKey(_isoDate(_selectedDate))) {
-      return;
-    }
-
-    setState(() {
-      _loading = true;
-      _error = null;
-    });
-    try {
-      if (_weeklyPlan) {
-        await _generateWeek(_selectedDate);
-      } else {
-        await _generateDay(_selectedDate);
-      }
-    } catch (error) {
-      if (mounted) {
-        setState(() => _error = error.toString());
-      }
-    } finally {
-      if (mounted) {
-        setState(() => _loading = false);
-      }
-    }
-  }
-
   void _mergeSavedPlans(List<Map<String, dynamic>> plans) {
     final merged = _plansByDate;
     for (final plan in plans) {
@@ -5328,12 +6054,10 @@ class _PlannerScreenState extends State<PlannerScreen> {
     setState(() {
       _selectedDate = _dateOnly(_selectedDate.add(Duration(days: amount)));
     });
-    await _ensurePlanForSelection(force: true);
   }
 
   Future<void> _setPlanMode(bool weeklyPlan) async {
     setState(() => _weeklyPlan = weeklyPlan);
-    await _ensurePlanForSelection();
   }
 
   Future<void> _pickDate() async {
@@ -5346,7 +6070,6 @@ class _PlannerScreenState extends State<PlannerScreen> {
     );
     if (picked != null && mounted) {
       setState(() => _selectedDate = _dateOnly(picked));
-      await _ensurePlanForSelection(force: true);
     }
   }
 
@@ -5383,6 +6106,114 @@ class _PlannerScreenState extends State<PlannerScreen> {
               onNext: () => _moveDate(_weeklyPlan ? 7 : 1),
               onPickDate: _pickDate,
             ),
+            const SizedBox(height: 16),
+            AppCard(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Plan settings',
+                    style: TextStyle(fontWeight: FontWeight.w900),
+                  ),
+                  const SizedBox(height: 12),
+                  LayoutBuilder(
+                    builder: (context, settingsConstraints) {
+                      final width = settingsConstraints.maxWidth < 700
+                          ? settingsConstraints.maxWidth
+                          : (settingsConstraints.maxWidth - 24) / 3;
+                      return Wrap(
+                        spacing: 12,
+                        runSpacing: 12,
+                        children: [
+                          SizedBox(
+                            width: width,
+                            child: NumberField(
+                              controller: _calories,
+                              label: 'Daily calories',
+                            ),
+                          ),
+                          SizedBox(
+                            width: width,
+                            child: NumberField(
+                              controller: _protein,
+                              label: 'Protein (g)',
+                            ),
+                          ),
+                          SizedBox(
+                            width: width,
+                            child: NumberField(
+                              controller: _carbs,
+                              label: 'Carbohydrates (g)',
+                            ),
+                          ),
+                          SizedBox(
+                            width: width,
+                            child: NumberField(
+                              controller: _fat,
+                              label: 'Fat (g)',
+                            ),
+                          ),
+                          SizedBox(
+                            width: width,
+                            child: NumberField(
+                              controller: _budget,
+                              label: 'Daily grocery budget estimate',
+                            ),
+                          ),
+                          SizedBox(
+                            width: width,
+                            child: TextFormField(
+                              controller: _allergies,
+                              decoration: const InputDecoration(
+                                labelText: 'Allergies (comma separated)',
+                              ),
+                            ),
+                          ),
+                          SizedBox(
+                            width: width,
+                            child: SelectField(
+                              label: 'Goal',
+                              value: _goal,
+                              values: const [
+                                'lose_weight',
+                                'maintain',
+                                'gain_muscle',
+                                'gain_weight',
+                              ],
+                              onChanged: (value) =>
+                                  setState(() => _goal = value),
+                            ),
+                          ),
+                          SizedBox(
+                            width: width,
+                            child: SelectField(
+                              label: 'Preference',
+                              value: _preference,
+                              values: const [
+                                'balanced',
+                                'high-protein',
+                                'low-carb',
+                                'vegetarian',
+                                'vegan',
+                                'halal',
+                                'cambodian',
+                              ],
+                              onChanged: (value) =>
+                                  setState(() => _preference = value),
+                            ),
+                          ),
+                        ],
+                      );
+                    },
+                  ),
+                  const SizedBox(height: 8),
+                  const Text(
+                    'Budget is checked against estimated grocery costs after the plan is generated.',
+                    style: TextStyle(color: Color(0xFF667085), fontSize: 11),
+                  ),
+                ],
+              ),
+            ),
             if (_error != null) ...[
               const SizedBox(height: 14),
               ErrorBanner(message: _error!),
@@ -5406,6 +6237,208 @@ class _PlannerScreenState extends State<PlannerScreen> {
           ],
         );
       },
+    );
+  }
+}
+
+class _GroceryExportDialog extends StatefulWidget {
+  const _GroceryExportDialog({required this.days});
+
+  final List<_PlannerWeekDay> days;
+
+  @override
+  State<_GroceryExportDialog> createState() => _GroceryExportDialogState();
+}
+
+class _GroceryExportDialogState extends State<_GroceryExportDialog> {
+  late final Set<int> _selectedPlanIds;
+
+  List<_PlannerWeekDay> get _exportableDays =>
+      widget.days.where((day) => day.planId != null).toList();
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedPlanIds = _exportableDays
+        .map((day) => day.planId)
+        .whereType<int>()
+        .toSet();
+  }
+
+  void _setAll(bool selected) {
+    setState(() {
+      _selectedPlanIds.clear();
+      if (selected) {
+        _selectedPlanIds.addAll(_exportableDays.map((day) => day.planId!));
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final exportableDays = _exportableDays;
+    final allSelected =
+        exportableDays.isNotEmpty &&
+        _selectedPlanIds.length == exportableDays.length;
+    return AlertDialog(
+      title: const Text('Export to grocery'),
+      content: SizedBox(
+        width: 560,
+        child: exportableDays.isEmpty
+            ? const Padding(
+                padding: EdgeInsets.symmetric(vertical: 18),
+                child: Text(
+                  'Generate a meal plan first, then export it to grocery.',
+                ),
+              )
+            : Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: CheckboxListTile(
+                          value: allSelected,
+                          onChanged: (value) => _setAll(value ?? false),
+                          controlAffinity: ListTileControlAffinity.leading,
+                          contentPadding: EdgeInsets.zero,
+                          title: const Text('Select all visible meal plans'),
+                        ),
+                      ),
+                      TextButton(
+                        onPressed: () => _setAll(false),
+                        child: const Text('Clear'),
+                      ),
+                    ],
+                  ),
+                  const Divider(height: 20),
+                  ConstrainedBox(
+                    constraints: const BoxConstraints(maxHeight: 420),
+                    child: ListView.separated(
+                      shrinkWrap: true,
+                      itemCount: exportableDays.length,
+                      separatorBuilder: (_, _) => const Divider(height: 12),
+                      itemBuilder: (context, index) {
+                        final day = exportableDays[index];
+                        final planId = day.planId!;
+                        return CheckboxListTile(
+                          value: _selectedPlanIds.contains(planId),
+                          onChanged: (value) {
+                            setState(() {
+                              if (value == true) {
+                                _selectedPlanIds.add(planId);
+                              } else {
+                                _selectedPlanIds.remove(planId);
+                              }
+                            });
+                          },
+                          controlAffinity: ListTileControlAffinity.leading,
+                          contentPadding: EdgeInsets.zero,
+                          title: Text(
+                            day.name,
+                            style: const TextStyle(fontWeight: FontWeight.w900),
+                          ),
+                          subtitle: Text(
+                            _exportFoodPreview(day),
+                            maxLines: 3,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          secondary: Text(
+                            '${_formatFoodNumber(day.calories)} cal',
+                            style: const TextStyle(
+                              color: Color(0xFF12A05C),
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        FilledButton.icon(
+          onPressed: _selectedPlanIds.isEmpty
+              ? null
+              : () => Navigator.of(context).pop(_selectedPlanIds.toList()),
+          icon: const Icon(Icons.shopping_cart_outlined, size: 16),
+          label: Text('Export ${_selectedPlanIds.length} selected'),
+        ),
+      ],
+    );
+  }
+
+  String _exportFoodPreview(_PlannerWeekDay day) {
+    final foods = day.meals
+        .expand((meal) => meal.items.map((item) => item.name))
+        .toSet()
+        .toList();
+    if (foods.isEmpty) {
+      return 'No foods in this plan';
+    }
+    return foods.join(', ');
+  }
+}
+
+class _GroceryExportResultDialog extends StatelessWidget {
+  const _GroceryExportResultDialog({required this.data});
+
+  final Map<String, dynamic> data;
+
+  @override
+  Widget build(BuildContext context) {
+    final items = data['items'] as List<dynamic>? ?? [];
+    return AlertDialog(
+      title: const Text('Grocery list exported'),
+      content: SizedBox(
+        width: 460,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SuccessBanner(
+              message:
+                  '${items.length} grocery item${items.length == 1 ? '' : 's'} created. Estimated total: ${data['estimated_total_cost']}',
+            ),
+            const SizedBox(height: 14),
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxHeight: 300),
+              child: ListView.builder(
+                shrinkWrap: true,
+                itemCount: items.length,
+                itemBuilder: (context, index) {
+                  final item = Map<String, dynamic>.from(items[index] as Map);
+                  return ListTile(
+                    dense: true,
+                    contentPadding: EdgeInsets.zero,
+                    leading: const Icon(Icons.shopping_basket_outlined),
+                    title: Text(item['food_item']?.toString() ?? 'Item'),
+                    subtitle: Text(item['quantity']?.toString() ?? ''),
+                    trailing: Text('${item['estimated_cost']}'),
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        OutlinedButton.icon(
+          onPressed: () => grocery_pdf_export.printGroceryListPdf(data),
+          icon: const Icon(Icons.picture_as_pdf_outlined, size: 16),
+          label: const Text('Print / Save PDF'),
+        ),
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Close'),
+        ),
+      ],
     );
   }
 }
@@ -6395,11 +7428,13 @@ class _PlannerWeekDay {
   const _PlannerWeekDay({
     required this.name,
     required this.date,
+    required this.planId,
     required this.meals,
   });
 
   final String name;
   final DateTime date;
+  final int? planId;
   final List<_PlannerMeal> meals;
 
   double get calories => meals.fold(0, (sum, meal) => sum + meal.calories);
@@ -6518,10 +7553,12 @@ List<_PlannerWeekDay> _weeklyPlannerDays(
 ) {
   return List.generate(7, (offset) {
     final date = _dateOnly(weekStart.add(Duration(days: offset)));
+    final plan = plansByDate[_isoDate(date)];
     return _PlannerWeekDay(
       name: '${_weekdayName(date)} ${date.day}',
       date: date,
-      meals: _plannerMealsFromPlan(plansByDate[_isoDate(date)]),
+      planId: plan?['id'] as int?,
+      meals: _plannerMealsFromPlan(plan),
     );
   });
 }
@@ -6680,9 +7717,13 @@ class _FoodLogScreenState extends State<FoodLogScreen> {
       final foods = await widget.apiClient.foods();
       final logs = await widget.apiClient.foodLogs();
       final summary = await widget.apiClient.nutritionSummary(todayIsoDate());
+      final todayLogs = logs.where((log) {
+        final parsed = DateTime.tryParse(log['logged_at']?.toString() ?? '');
+        return parsed != null && _isoDate(parsed.toLocal()) == todayIsoDate();
+      }).toList();
       setState(() {
         _foods = foods;
-        _logs = logs;
+        _logs = todayLogs;
         _summary = summary;
         _selectedFoodId ??= foods.isEmpty ? null : foods.first['id'] as int;
         _error = null;
@@ -6707,8 +7748,23 @@ class _FoodLogScreenState extends State<FoodLogScreen> {
         mealType: _mealType,
         quantity: double.tryParse(_quantity.text) ?? 1,
         notes: _notes.text.trim().isEmpty ? null : _notes.text.trim(),
+        logDate: todayIsoDate(),
       );
       _notes.clear();
+      await _load();
+    } catch (error) {
+      setState(() => _error = error.toString());
+    } finally {
+      if (mounted) {
+        setState(() => _loading = false);
+      }
+    }
+  }
+
+  Future<void> _deleteFoodLog(int logId) async {
+    setState(() => _loading = true);
+    try {
+      await widget.apiClient.deleteFoodLog(logId);
       await _load();
     } catch (error) {
       setState(() => _error = error.toString());
@@ -6751,6 +7807,7 @@ class _FoodLogScreenState extends State<FoodLogScreen> {
                   onFoodChanged: (value) =>
                       setState(() => _selectedFoodId = value),
                   onLogFood: _logFood,
+                  onDeleteLog: _deleteFoodLog,
                 ),
                 const SizedBox(height: 18),
                 _FoodLogSidebar(summary: _summary),
@@ -6774,6 +7831,7 @@ class _FoodLogScreenState extends State<FoodLogScreen> {
                     onFoodChanged: (value) =>
                         setState(() => _selectedFoodId = value),
                     onLogFood: _logFood,
+                    onDeleteLog: _deleteFoodLog,
                   ),
                 ),
                 const SizedBox(width: 22),
@@ -6836,6 +7894,7 @@ class _FoodLogMainColumn extends StatelessWidget {
     required this.onMealChanged,
     required this.onFoodChanged,
     required this.onLogFood,
+    required this.onDeleteLog,
   });
 
   final List<Map<String, dynamic>> foods;
@@ -6848,6 +7907,7 @@ class _FoodLogMainColumn extends StatelessWidget {
   final ValueChanged<String> onMealChanged;
   final ValueChanged<int?> onFoodChanged;
   final VoidCallback onLogFood;
+  final ValueChanged<int> onDeleteLog;
 
   @override
   Widget build(BuildContext context) {
@@ -6865,7 +7925,7 @@ class _FoodLogMainColumn extends StatelessWidget {
           onLogFood: onLogFood,
         ),
         const SizedBox(height: 20),
-        _TodaysFoodLogCard(logs: logs),
+        _TodaysFoodLogCard(logs: logs, onDeleteLog: onDeleteLog),
       ],
     );
   }
@@ -6994,9 +8054,10 @@ class _LogFoodFormCard extends StatelessWidget {
 }
 
 class _TodaysFoodLogCard extends StatelessWidget {
-  const _TodaysFoodLogCard({required this.logs});
+  const _TodaysFoodLogCard({required this.logs, required this.onDeleteLog});
 
   final List<Map<String, dynamic>> logs;
+  final ValueChanged<int> onDeleteLog;
 
   static const _mealOrder = ['breakfast', 'lunch', 'dinner', 'snack'];
 
@@ -7037,7 +8098,17 @@ class _TodaysFoodLogCard extends StatelessWidget {
                 return [
                   _FoodLogMealLabel(meal: meal),
                   const SizedBox(height: 12),
-                  ...mealLogs.map((log) => _FoodLogEntryTile(log: log)),
+                  ...mealLogs.map(
+                    (log) => _FoodLogEntryTile(
+                      log: log,
+                      onDelete: () {
+                        final id = log['id'];
+                        if (id is int) {
+                          onDeleteLog(id);
+                        }
+                      },
+                    ),
+                  ),
                   const SizedBox(height: 18),
                 ];
               }),
@@ -7074,9 +8145,10 @@ class _FoodLogMealLabel extends StatelessWidget {
 }
 
 class _FoodLogEntryTile extends StatelessWidget {
-  const _FoodLogEntryTile({required this.log});
+  const _FoodLogEntryTile({required this.log, required this.onDelete});
 
   final Map<String, dynamic> log;
+  final VoidCallback onDelete;
 
   @override
   Widget build(BuildContext context) {
@@ -7150,7 +8222,7 @@ class _FoodLogEntryTile extends StatelessWidget {
               const SizedBox(width: 22),
               IconButton(
                 tooltip: 'Delete log',
-                onPressed: () {},
+                onPressed: onDelete,
                 icon: const Icon(
                   Icons.delete_outline,
                   color: Color(0xFFFF3B5C),
@@ -7647,6 +8719,14 @@ String _formatLogTime(dynamic value) {
   return '$hour:$minute $period';
 }
 
+String _shortDateTime(dynamic value) {
+  final parsed = DateTime.tryParse(value?.toString() ?? '')?.toLocal();
+  if (parsed == null) {
+    return 'Grocery list';
+  }
+  return '${_shortMonthName(parsed)} ${parsed.day}, ${_formatLogTime(value)}';
+}
+
 class _ReceiptIconPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
@@ -7693,6 +8773,7 @@ class GroceryScreen extends StatefulWidget {
 class _GroceryScreenState extends State<GroceryScreen> {
   final _budget = TextEditingController(text: '35');
   List<Map<String, dynamic>> _lists = [];
+  int? _selectedListId;
   bool _loading = true;
   String? _error;
 
@@ -7716,7 +8797,15 @@ class _GroceryScreenState extends State<GroceryScreen> {
     try {
       final lists = await widget.apiClient.groceryLists();
       if (mounted) {
-        setState(() => _lists = lists);
+        setState(() {
+          _lists = lists;
+          if (lists.isEmpty) {
+            _selectedListId = null;
+          } else if (_selectedListId == null ||
+              !lists.any((list) => list['id'] == _selectedListId)) {
+            _selectedListId = lists.first['id'] as int?;
+          }
+        });
       }
     } catch (error) {
       if (mounted) {
@@ -7739,7 +8828,13 @@ class _GroceryScreenState extends State<GroceryScreen> {
         budget: double.tryParse(_budget.text),
       );
       if (mounted) {
-        setState(() => _lists = [list, ..._lists]);
+        setState(() {
+          _lists = [
+            list,
+            ..._lists.where((existing) => existing['id'] != list['id']),
+          ];
+          _selectedListId = list['id'] as int?;
+        });
       }
     } catch (error) {
       if (mounted) {
@@ -7763,6 +8858,7 @@ class _GroceryScreenState extends State<GroceryScreen> {
           _lists = _lists
               .map((list) => list['id'] == updated['id'] ? updated : list)
               .toList();
+          _selectedListId = updated['id'] as int?;
         });
       }
     } catch (error) {
@@ -7772,17 +8868,109 @@ class _GroceryScreenState extends State<GroceryScreen> {
     }
   }
 
+  Future<void> _setItemStatus(int itemId, String status) async {
+    try {
+      final updated = await widget.apiClient.updateGroceryItem(
+        itemId: itemId,
+        status: status,
+      );
+      if (mounted) {
+        setState(() {
+          _lists = _lists
+              .map((list) => list['id'] == updated['id'] ? updated : list)
+              .toList();
+          _selectedListId = updated['id'] as int?;
+        });
+      }
+    } catch (error) {
+      if (mounted) {
+        setState(() => _error = error.toString());
+      }
+    }
+  }
+
+  Future<void> _setAllPurchased(
+    List<Map<String, dynamic>> items,
+    bool purchased,
+  ) async {
+    final changedItems = items
+        .where((item) => (_groceryItemStatus(item) == 'bought') != purchased)
+        .toList();
+    if (changedItems.isEmpty) {
+      return;
+    }
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      Map<String, dynamic>? updatedList;
+      for (final item in changedItems) {
+        updatedList = await widget.apiClient.updateGroceryItem(
+          itemId: item['id'] as int,
+          status: purchased ? 'bought' : 'need_to_buy',
+        );
+      }
+      if (mounted && updatedList != null) {
+        final latestList = updatedList;
+        setState(() {
+          _lists = _lists
+              .map((list) => list['id'] == latestList['id'] ? latestList : list)
+              .toList();
+          _selectedListId = latestList['id'] as int?;
+        });
+      }
+    } catch (error) {
+      if (mounted) {
+        setState(() => _error = error.toString());
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _loading = false);
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    final latest = _lists.isEmpty ? null : _lists.first;
-    final items = latest?['items'] is List
+    final selected = _selectedList();
+    final items = selected?['items'] is List
         ? List<Map<String, dynamic>>.from(
-            (latest!['items'] as List).map(
+            (selected!['items'] as List).map(
               (item) => Map<String, dynamic>.from(item as Map),
             ),
           )
         : <Map<String, dynamic>>[];
-    final purchased = items.where((item) => item['purchased'] == true).length;
+    final purchased = items
+        .where((item) => _groceryItemStatus(item) == 'bought')
+        .length;
+    final alreadyHave = items
+        .where((item) => _groceryItemStatus(item) == 'have')
+        .length;
+    final planToBuyTotal = items
+        .where((item) => _groceryItemStatus(item) != 'have')
+        .fold<double>(
+          0,
+          (sum, item) => sum + _foodNumber(item['estimated_cost']),
+        );
+    final remainingTotal = items
+        .where((item) => _groceryItemStatus(item) == 'need_to_buy')
+        .fold<double>(
+          0,
+          (sum, item) => sum + _foodNumber(item['estimated_cost']),
+        );
+    final purchasedTotal = items
+        .where((item) => _groceryItemStatus(item) == 'bought')
+        .fold<double>(
+          0,
+          (sum, item) => sum + _foodNumber(item['estimated_cost']),
+        );
+    final alreadyHaveTotal = items
+        .where((item) => _groceryItemStatus(item) == 'have')
+        .fold<double>(
+          0,
+          (sum, item) => sum + _foodNumber(item['estimated_cost']),
+        );
     return ListView(
       padding: const EdgeInsets.only(bottom: 32),
       children: [
@@ -7790,10 +8978,22 @@ class _GroceryScreenState extends State<GroceryScreen> {
           title: 'Grocery',
           subtitle: 'Generate and check off ingredients from meal plans',
           icon: Icons.shopping_cart_outlined,
-          action: FilledButton.icon(
-            onPressed: _loading ? null : _generate,
-            icon: const Icon(Icons.auto_awesome, size: 15),
-            label: Text(_loading ? 'Loading...' : 'Generate List'),
+          action: Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            alignment: WrapAlignment.end,
+            children: [
+              OutlinedButton.icon(
+                onPressed: _loading ? null : _load,
+                icon: const Icon(Icons.refresh, size: 15),
+                label: const Text('Refresh'),
+              ),
+              FilledButton.icon(
+                onPressed: _loading ? null : _generate,
+                icon: const Icon(Icons.auto_awesome, size: 15),
+                label: Text(_loading ? 'Loading...' : 'Generate List'),
+              ),
+            ],
           ),
         ),
         const SizedBox(height: 18),
@@ -7807,10 +9007,25 @@ class _GroceryScreenState extends State<GroceryScreen> {
             final summary = _SystemInfoPanel(
               children: [
                 _SystemStatTile(
-                  label: 'Estimated Total',
-                  value:
-                      '\$${_formatFoodNumber(_foodNumber(latest?['estimated_total_cost']))}',
+                  label: 'Plan to Buy',
+                  value: '\$${_formatFoodNumber(planToBuyTotal)}',
                   icon: Icons.payments_outlined,
+                ),
+                _SystemStatTile(
+                  label: 'Still Need',
+                  value: '\$${_formatFoodNumber(remainingTotal)}',
+                  icon: Icons.receipt_long_outlined,
+                ),
+                _SystemStatTile(
+                  label: 'Bought Cost',
+                  value: '\$${_formatFoodNumber(purchasedTotal)}',
+                  icon: Icons.shopping_bag_outlined,
+                ),
+                _SystemStatTile(
+                  label: 'Already Have',
+                  value:
+                      '$alreadyHave item${alreadyHave == 1 ? '' : 's'} • \$${_formatFoodNumber(alreadyHaveTotal)}',
+                  icon: Icons.kitchen_outlined,
                 ),
                 _SystemStatTile(
                   label: 'Items Checked',
@@ -7824,6 +9039,50 @@ class _GroceryScreenState extends State<GroceryScreen> {
                   hintText: '35',
                   keyboardType: TextInputType.number,
                 ),
+                if (_lists.isNotEmpty) ...[
+                  const SizedBox(height: 14),
+                  _GroceryListPicker(
+                    lists: _lists,
+                    selectedListId: _selectedListId,
+                    onChanged: (value) =>
+                        setState(() => _selectedListId = value),
+                  ),
+                  const SizedBox(height: 14),
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: selected == null
+                          ? null
+                          : () => grocery_pdf_export.printGroceryListPdf(
+                              selected,
+                            ),
+                      icon: const Icon(Icons.picture_as_pdf_outlined, size: 16),
+                      label: const Text('Print / Save PDF'),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: _loading || items.isEmpty
+                              ? null
+                              : () => _setAllPurchased(items, true),
+                          child: const Text('Mark all bought'),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: _loading || items.isEmpty
+                              ? null
+                              : () => _setAllPurchased(items, false),
+                          child: const Text('Clear checks'),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
               ],
             );
             final list = _FoodLogPanel(
@@ -7832,12 +9091,38 @@ class _GroceryScreenState extends State<GroceryScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
-                      'Shopping List',
-                      style: TextStyle(
-                        color: Color(0xFF111827),
-                        fontSize: 16,
-                        fontWeight: FontWeight.w900,
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            selected?['name']?.toString() ?? 'Shopping List',
+                            style: const TextStyle(
+                              color: Color(0xFF111827),
+                              fontSize: 16,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                        ),
+                        if (selected?['created_at'] != null)
+                          Text(
+                            _formatLogTime(selected?['created_at']),
+                            style: const TextStyle(
+                              color: Color(0xFF667085),
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      items.isEmpty
+                          ? 'Ingredients will appear here after generating a list from meal plans.'
+                          : 'Ingredients generated from meal plans with quantity, estimated cost, and kitchen status.',
+                      style: const TextStyle(
+                        color: Color(0xFF667085),
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
                     const SizedBox(height: 16),
@@ -7856,12 +9141,25 @@ class _GroceryScreenState extends State<GroceryScreen> {
                             'Generate a meal plan, then create a grocery list.',
                       )
                     else
-                      ...items.map(
-                        (item) => _GroceryItemRow(
-                          item: item,
-                          onChanged: (value) =>
-                              _toggleItem(item['id'] as int, value ?? false),
-                        ),
+                      Column(
+                        children: [
+                          const _GroceryTableHeader(),
+                          const SizedBox(height: 8),
+                          ...items.map(
+                            (item) => _GroceryItemRow(
+                              item: item,
+                              onChanged: (value) => _toggleItem(
+                                item['id'] as int,
+                                value ?? false,
+                              ),
+                              onStatusChanged: (value) {
+                                if (value != null) {
+                                  _setItemStatus(item['id'] as int, value);
+                                }
+                              },
+                            ),
+                          ),
+                        ],
                       ),
                   ],
                 ),
@@ -7885,47 +9183,206 @@ class _GroceryScreenState extends State<GroceryScreen> {
       ],
     );
   }
+
+  Map<String, dynamic>? _selectedList() {
+    if (_lists.isEmpty) {
+      return null;
+    }
+    return _lists.firstWhere(
+      (list) => list['id'] == _selectedListId,
+      orElse: () => _lists.first,
+    );
+  }
 }
 
-class _GroceryItemRow extends StatelessWidget {
-  const _GroceryItemRow({required this.item, required this.onChanged});
+class _GroceryListPicker extends StatelessWidget {
+  const _GroceryListPicker({
+    required this.lists,
+    required this.selectedListId,
+    required this.onChanged,
+  });
 
-  final Map<String, dynamic> item;
-  final ValueChanged<bool?> onChanged;
+  final List<Map<String, dynamic>> lists;
+  final int? selectedListId;
+  final ValueChanged<int?> onChanged;
 
   @override
   Widget build(BuildContext context) {
-    final purchased = item['purchased'] == true;
+    return DropdownButtonFormField<int>(
+      initialValue: lists.any((list) => list['id'] == selectedListId)
+          ? selectedListId
+          : lists.first['id'] as int?,
+      isExpanded: true,
+      decoration: const InputDecoration(labelText: 'Grocery list'),
+      items: lists.map((list) {
+        final id = list['id'] as int;
+        final itemCount = (list['items'] as List<dynamic>? ?? []).length;
+        final created = _shortDateTime(list['created_at']);
+        return DropdownMenuItem<int>(
+          value: id,
+          child: Text(
+            '$created • $itemCount item${itemCount == 1 ? '' : 's'}',
+            overflow: TextOverflow.ellipsis,
+          ),
+        );
+      }).toList(),
+      onChanged: onChanged,
+    );
+  }
+}
+
+class _GroceryTableHeader extends StatelessWidget {
+  const _GroceryTableHeader();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Padding(
+      padding: EdgeInsets.symmetric(horizontal: 14),
+      child: Row(
+        children: [
+          SizedBox(width: 48),
+          Expanded(flex: 3, child: _GroceryHeaderLabel('Ingredient')),
+          Expanded(flex: 2, child: _GroceryHeaderLabel('Quantity')),
+          Expanded(flex: 2, child: _GroceryHeaderLabel('Est. cost')),
+          SizedBox(width: 142, child: _GroceryHeaderLabel('Status')),
+        ],
+      ),
+    );
+  }
+}
+
+class _GroceryHeaderLabel extends StatelessWidget {
+  const _GroceryHeaderLabel(this.label);
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      label,
+      style: const TextStyle(
+        color: Color(0xFF667085),
+        fontSize: 10,
+        fontWeight: FontWeight.w900,
+      ),
+    );
+  }
+}
+
+String _groceryItemStatus(Map<String, dynamic> item) {
+  final status = item['status']?.toString();
+  if (status == 'need_to_buy' || status == 'have' || status == 'bought') {
+    return status!;
+  }
+  return item['purchased'] == true ? 'bought' : 'need_to_buy';
+}
+
+class _GroceryItemRow extends StatelessWidget {
+  const _GroceryItemRow({
+    required this.item,
+    required this.onChanged,
+    required this.onStatusChanged,
+  });
+
+  final Map<String, dynamic> item;
+  final ValueChanged<bool?> onChanged;
+  final ValueChanged<String?> onStatusChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final status = _groceryItemStatus(item);
+    final purchased = status == 'bought';
+    final have = status == 'have';
+    final cost = _formatFoodNumber(_foodNumber(item['estimated_cost']));
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
       child: DecoratedBox(
         decoration: BoxDecoration(
-          color: purchased ? const Color(0xFFEAF7F1) : const Color(0xFFF8FAFC),
+          color: purchased
+              ? const Color(0xFFEAF7F1)
+              : have
+              ? const Color(0xFFEFF6FF)
+              : const Color(0xFFF8FAFC),
           borderRadius: BorderRadius.circular(8),
           border: Border.all(color: const Color(0xFFE4E7EC)),
         ),
-        child: CheckboxListTile(
-          value: purchased,
-          onChanged: onChanged,
-          activeColor: const Color(0xFF16A05D),
-          controlAffinity: ListTileControlAffinity.leading,
-          title: Text(
-            item['food_item']?.toString() ?? 'Ingredient',
-            style: const TextStyle(
-              color: Color(0xFF111827),
-              fontSize: 13,
-              fontWeight: FontWeight.w900,
-            ),
-          ),
-          subtitle: Text(
-            '${item['quantity'] ?? '-'} • \$${_formatFoodNumber(_foodNumber(item['estimated_cost']))}',
-            style: const TextStyle(
-              color: Color(0xFF667085),
-              fontSize: 11,
-              fontWeight: FontWeight.w600,
-            ),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(10, 12, 14, 12),
+          child: Row(
+            children: [
+              SizedBox(
+                width: 42,
+                child: Checkbox(
+                  value: purchased,
+                  onChanged: onChanged,
+                  activeColor: const Color(0xFF16A05D),
+                ),
+              ),
+              Expanded(
+                flex: 3,
+                child: Text(
+                  item['food_item']?.toString() ?? 'Ingredient',
+                  style: const TextStyle(
+                    color: Color(0xFF111827),
+                    fontSize: 13,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+              Expanded(
+                flex: 2,
+                child: _GroceryValueText(item['quantity']?.toString() ?? '-'),
+              ),
+              Expanded(flex: 2, child: _GroceryValueText('\$$cost')),
+              SizedBox(
+                width: 142,
+                child: DropdownButtonHideUnderline(
+                  child: DropdownButton<String>(
+                    value: status,
+                    isExpanded: true,
+                    iconSize: 16,
+                    style: const TextStyle(
+                      color: Color(0xFF344054),
+                      fontSize: 11,
+                      fontWeight: FontWeight.w800,
+                    ),
+                    items: const [
+                      DropdownMenuItem(
+                        value: 'need_to_buy',
+                        child: Text('Need to buy'),
+                      ),
+                      DropdownMenuItem(
+                        value: 'have',
+                        child: Text('Already have'),
+                      ),
+                      DropdownMenuItem(value: 'bought', child: Text('Bought')),
+                    ],
+                    onChanged: onStatusChanged,
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _GroceryValueText extends StatelessWidget {
+  const _GroceryValueText(this.value);
+
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      value,
+      overflow: TextOverflow.ellipsis,
+      style: const TextStyle(
+        color: Color(0xFF344054),
+        fontSize: 12,
+        fontWeight: FontWeight.w800,
       ),
     );
   }
@@ -8201,94 +9658,931 @@ class SettingsScreen extends StatefulWidget {
     super.key,
     required this.apiClient,
     required this.onLogout,
+    required this.darkMode,
+    required this.onDarkModeChanged,
   });
 
   final ApiClient apiClient;
   final VoidCallback onLogout;
+  final bool darkMode;
+  final ValueChanged<bool> onDarkModeChanged;
 
   @override
   State<SettingsScreen> createState() => _SettingsScreenState();
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
-  bool _notifications = true;
-  bool _autoGenerate = true;
-  bool _compactCards = false;
+  final _name = TextEditingController(text: 'John Doe');
+  final _email = TextEditingController(text: 'johndoe@example.com');
+  String? _settingsMessage;
+  String? _settingsError;
+  bool _loadingAccount = true;
+  bool _mealReminders = true;
+  bool _waterReminders = true;
+  bool _weeklySummary = true;
+  bool _marketingUpdates = false;
+  bool _darkMode = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _darkMode = widget.darkMode;
+    _loadAccount();
+  }
+
+  @override
+  void dispose() {
+    _name.dispose();
+    _email.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadAccount() async {
+    try {
+      final preferences = await SharedPreferences.getInstance();
+      final user = await widget.apiClient.me();
+      if (mounted) {
+        setState(() {
+          _name.text = user['full_name']?.toString() ?? _name.text;
+          _email.text = user['email']?.toString() ?? _email.text;
+          _mealReminders =
+              preferences.getBool('meal_reminders') ?? _mealReminders;
+          _waterReminders =
+              preferences.getBool('water_reminders') ?? _waterReminders;
+          _weeklySummary =
+              preferences.getBool('weekly_summary') ?? _weeklySummary;
+          _marketingUpdates =
+              preferences.getBool('marketing_updates') ?? _marketingUpdates;
+          _loadingAccount = false;
+        });
+      }
+    } catch (error) {
+      if (mounted) {
+        setState(() {
+          _settingsError = error.toString();
+          _loadingAccount = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _saveSettings() async {
+    try {
+      final updated = await widget.apiClient.updateAccount(
+        email: _email.text.trim(),
+        fullName: _name.text.trim(),
+      );
+      final preferences = await SharedPreferences.getInstance();
+      await Future.wait([
+        preferences.setBool('meal_reminders', _mealReminders),
+        preferences.setBool('water_reminders', _waterReminders),
+        preferences.setBool('weekly_summary', _weeklySummary),
+        preferences.setBool('marketing_updates', _marketingUpdates),
+      ]);
+      _name.text = updated['full_name']?.toString() ?? _name.text;
+      _email.text = updated['email']?.toString() ?? _email.text;
+      _showMessage('Account and preferences saved.');
+    } catch (error) {
+      setState(() => _settingsError = error.toString());
+    }
+  }
+
+  void _showMessage(String message) {
+    setState(() {
+      _settingsMessage = message;
+      _settingsError = null;
+    });
+  }
+
+  Future<void> _showChangePasswordDialog() async {
+    final changed = await showDialog<bool>(
+      context: context,
+      builder: (context) => _SettingsChangePasswordDialog(
+        apiClient: widget.apiClient,
+        email: _email.text.trim(),
+      ),
+    );
+    if (changed == true && mounted) {
+      _showMessage('Password changed successfully.');
+    }
+  }
+
+  Future<void> _exportData() async {
+    try {
+      final data = await Future.wait<dynamic>([
+        widget.apiClient.me(),
+        widget.apiClient.profile(),
+        widget.apiClient.foodLogs(),
+        widget.apiClient.mealPlans(),
+        widget.apiClient.groceryLists(),
+        widget.apiClient.weightProgress(),
+        widget.apiClient.waterLog(todayIsoDate()),
+        widget.apiClient.allergies(),
+      ]);
+      if (!mounted) {
+        return;
+      }
+      await showDialog<void>(
+        context: context,
+        builder: (context) => _SettingsExportDialog(
+          data: {
+            'user': data[0],
+            'profile': data[1],
+            'food_logs': data[2],
+            'meal_plans': data[3],
+            'grocery_lists': data[4],
+            'weight_progress': data[5],
+            'water_today': data[6],
+            'allergies': data[7],
+          },
+        ),
+      );
+    } catch (error) {
+      setState(() => _settingsError = error.toString());
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return ListView(
-      padding: const EdgeInsets.only(bottom: 32),
+      padding: const EdgeInsets.fromLTRB(10, 0, 10, 34),
       children: [
-        _SystemPageHeader(
-          title: 'Settings',
-          subtitle: 'Manage app preferences and account actions',
-          icon: Icons.settings_outlined,
-          action: OutlinedButton.icon(
-            onPressed: widget.onLogout,
-            icon: const Icon(Icons.logout, size: 15),
-            label: const Text('Logout'),
-          ),
-        ),
-        const SizedBox(height: 18),
-        _FoodLogPanel(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(22, 22, 22, 14),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+        const _SettingsHeader(),
+        const SizedBox(height: 22),
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final stack = constraints.maxWidth < 820;
+            final mainColumn = Column(
               children: [
-                const Text(
-                  'Preferences',
-                  style: TextStyle(
-                    color: Color(0xFF111827),
-                    fontSize: 16,
-                    fontWeight: FontWeight.w900,
+                _SettingsPanel(
+                  title: 'Account Information',
+                  icon: Icons.person_outline,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (_loadingAccount) ...[
+                        const LinearProgressIndicator(minHeight: 3),
+                        const SizedBox(height: 14),
+                      ],
+                      _SettingsTextField(label: 'Full Name', controller: _name),
+                      const SizedBox(height: 14),
+                      _SettingsTextField(label: 'Email', controller: _email),
+                      const SizedBox(height: 16),
+                      FilledButton(
+                        onPressed: _saveSettings,
+                        style: FilledButton.styleFrom(
+                          minimumSize: const Size(86, 30),
+                          padding: const EdgeInsets.symmetric(horizontal: 18),
+                          backgroundColor: const Color(0xFF149B60),
+                          textStyle: const TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                        child: const Text('Save Changes'),
+                      ),
+                      if (_settingsMessage != null) ...[
+                        const SizedBox(height: 12),
+                        SuccessBanner(message: _settingsMessage!),
+                      ],
+                      if (_settingsError != null) ...[
+                        const SizedBox(height: 12),
+                        ErrorBanner(message: _settingsError!),
+                      ],
+                    ],
                   ),
                 ),
-                const SizedBox(height: 14),
-                SwitchListTile(
-                  value: _notifications,
-                  onChanged: (value) => setState(() => _notifications = value),
-                  title: const Text('Meal reminders'),
-                  subtitle: const Text('Show daily nutrition prompts'),
-                  activeThumbColor: const Color(0xFF16A05D),
-                ),
-                SwitchListTile(
-                  value: _autoGenerate,
-                  onChanged: (value) => setState(() => _autoGenerate = value),
-                  title: const Text('Auto-generate missing plans'),
-                  subtitle: const Text(
-                    'Create plans when calendar dates change',
+                const SizedBox(height: 18),
+                _SettingsPanel(
+                  title: 'Notifications',
+                  titleIndent: 26,
+                  child: Column(
+                    children: [
+                      _SettingsToggleRow(
+                        title: 'Meal Reminders',
+                        subtitle: 'Get reminded to log your meals',
+                        value: _mealReminders,
+                        onChanged: (value) =>
+                            setState(() => _mealReminders = value),
+                      ),
+                      _SettingsToggleRow(
+                        title: 'Water Reminders',
+                        subtitle: 'Get reminded to log your water',
+                        value: _waterReminders,
+                        onChanged: (value) =>
+                            setState(() => _waterReminders = value),
+                      ),
+                      _SettingsToggleRow(
+                        title: 'Weekly Summary',
+                        subtitle: 'Review your nutrition progress',
+                        value: _weeklySummary,
+                        onChanged: (value) =>
+                            setState(() => _weeklySummary = value),
+                      ),
+                      _SettingsToggleRow(
+                        title: 'Product Updates',
+                        subtitle: 'Receive nutrition feature updates',
+                        value: _marketingUpdates,
+                        onChanged: (value) =>
+                            setState(() => _marketingUpdates = value),
+                      ),
+                    ],
                   ),
-                  activeThumbColor: const Color(0xFF16A05D),
                 ),
-                SwitchListTile(
-                  value: _compactCards,
-                  onChanged: (value) => setState(() => _compactCards = value),
-                  title: const Text('Compact dashboard cards'),
-                  subtitle: const Text(
-                    'Use a denser layout for smaller screens',
+                const SizedBox(height: 18),
+                _SettingsPanel(
+                  title: 'Preferences',
+                  icon: Icons.language,
+                  child: Column(
+                    children: [
+                      _SettingsToggleRow(
+                        title: 'Dark Mode',
+                        subtitle: 'Toggle dark theme',
+                        value: _darkMode,
+                        leading: Icons.wb_sunny_outlined,
+                        onChanged: (value) {
+                          setState(() => _darkMode = value);
+                          widget.onDarkModeChanged(value);
+                        },
+                      ),
+                    ],
                   ),
-                  activeThumbColor: const Color(0xFF16A05D),
+                ),
+                const SizedBox(height: 18),
+                _SettingsPanel(
+                  title: 'Security',
+                  icon: Icons.lock_outline,
+                  child: Column(
+                    children: [
+                      _SettingsActionRow(
+                        title: 'Change Password',
+                        subtitle: 'Update your account password',
+                        onTap: _showChangePasswordDialog,
+                      ),
+                      const SizedBox(height: 12),
+                      _SettingsActionRow(
+                        title: 'Two-Factor Authentication',
+                        subtitle: 'Demo project uses OTP reset instead',
+                        onTap: () => _showMessage(
+                          'Two-factor authentication is not enabled in this demo.',
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ],
+            );
+            final sideColumn = Column(
+              children: [
+                _SettingsProfileCard(name: _name.text, email: _email.text),
+                const SizedBox(height: 14),
+                const _SettingsAboutCard(),
+                const SizedBox(height: 14),
+                _SettingsDangerCard(
+                  onExport: _exportData,
+                  onLogout: widget.onLogout,
+                ),
+              ],
+            );
+
+            if (stack) {
+              return Column(
+                children: [mainColumn, const SizedBox(height: 18), sideColumn],
+              );
+            }
+
+            return Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(flex: 13, child: mainColumn),
+                const SizedBox(width: 14),
+                SizedBox(width: 246, child: sideColumn),
+              ],
+            );
+          },
+        ),
+      ],
+    );
+  }
+}
+
+class _SettingsHeader extends StatelessWidget {
+  const _SettingsHeader();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Settings',
+          style: TextStyle(
+            color: Colors.black,
+            fontSize: 26,
+            fontWeight: FontWeight.w900,
+          ),
+        ),
+        SizedBox(height: 8),
+        Text(
+          'Manage your account and preferences',
+          style: TextStyle(
+            color: Color(0xFF2F3A45),
+            fontSize: 14,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _SettingsPanel extends StatelessWidget {
+  const _SettingsPanel({
+    required this.title,
+    required this.child,
+    this.icon,
+    this.titleIndent = 0,
+  });
+
+  final String title;
+  final Widget child;
+  final IconData? icon;
+  final double titleIndent;
+
+  @override
+  Widget build(BuildContext context) {
+    return _FoodLogPanel(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(28, 24, 28, 26),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: EdgeInsets.only(left: titleIndent),
+              child: Row(
+                children: [
+                  if (icon != null) ...[
+                    Icon(icon, size: 17, color: const Color(0xFF12A76A)),
+                    const SizedBox(width: 18),
+                  ],
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      color: Colors.black,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 20),
+            child,
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SettingsTextField extends StatelessWidget {
+  const _SettingsTextField({required this.label, required this.controller});
+
+  final String label;
+  final TextEditingController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    return TextFormField(
+      controller: controller,
+      style: const TextStyle(color: Color(0xFF111827), fontSize: 12),
+      decoration: InputDecoration(
+        labelText: label,
+        floatingLabelBehavior: FloatingLabelBehavior.always,
+        labelStyle: const TextStyle(
+          color: Color(0xFF9AA3AD),
+          fontSize: 11,
+          fontWeight: FontWeight.w600,
+        ),
+        filled: true,
+        fillColor: const Color(0xFFFCFDFC),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 12,
+          vertical: 11,
+        ),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(2),
+          borderSide: const BorderSide(color: Color(0xFF8B949E)),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(2),
+          borderSide: const BorderSide(color: Color(0xFF8B949E)),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(2),
+          borderSide: const BorderSide(color: Color(0xFF149B60), width: 1.2),
+        ),
+      ),
+    );
+  }
+}
+
+class _SettingsToggleRow extends StatelessWidget {
+  const _SettingsToggleRow({
+    required this.title,
+    required this.subtitle,
+    required this.value,
+    required this.onChanged,
+    this.leading,
+  });
+
+  final String title;
+  final String subtitle;
+  final bool value;
+  final ValueChanged<bool> onChanged;
+  final IconData? leading;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: const Color(0xFFF0FAF5),
+          borderRadius: BorderRadius.circular(7),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 12),
+          child: Row(
+            children: [
+              if (leading != null) ...[
+                Icon(leading, color: const Color(0xFF12A76A), size: 17),
+                const SizedBox(width: 18),
+              ],
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: const TextStyle(
+                        color: Colors.black,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      subtitle,
+                      style: const TextStyle(
+                        color: Colors.black,
+                        fontSize: 10,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Transform.scale(
+                scale: 0.76,
+                child: Switch(
+                  value: value,
+                  onChanged: onChanged,
+                  activeThumbColor: Colors.white,
+                  activeTrackColor: const Color(0xFF12A76A),
+                  inactiveThumbColor: const Color(0xFFE6F8EF),
+                  inactiveTrackColor: const Color(0xFFEFF8F3),
+                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SettingsActionRow extends StatelessWidget {
+  const _SettingsActionRow({
+    required this.title,
+    required this.subtitle,
+    required this.onTap,
+  });
+
+  final String title;
+  final String subtitle;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(7),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: const Color(0xFFF0FAF5),
+          borderRadius: BorderRadius.circular(7),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 13),
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: const TextStyle(
+                        color: Colors.black,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      subtitle,
+                      style: const TextStyle(
+                        color: Colors.black,
+                        fontSize: 10,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const Icon(
+                Icons.chevron_right,
+                color: Color(0xFF667085),
+                size: 18,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SettingsProfileCard extends StatelessWidget {
+  const _SettingsProfileCard({required this.name, required this.email});
+
+  final String name;
+  final String email;
+
+  @override
+  Widget build(BuildContext context) {
+    final initials = _initials(name);
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: const Color(0xFFDDF4EF),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: const Color(0xFFC9E2DD)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 20, 20, 22),
+        child: Column(
+          children: [
+            CircleAvatar(
+              radius: 41,
+              backgroundColor: const Color(0xFF0EA561),
+              child: Text(
+                initials,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 22,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+            ),
+            const SizedBox(height: 18),
+            Text(
+              name,
+              style: const TextStyle(
+                color: Colors.black,
+                fontSize: 14,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 3),
+            Text(
+              email,
+              style: const TextStyle(color: Color(0xFF667085), fontSize: 11),
+            ),
+            const SizedBox(height: 24),
+            const _SettingsMiniStat(label: 'Member since', value: 'Jan, 2026'),
+            const SizedBox(height: 13),
+            const _SettingsMiniStat(label: 'Days active', value: '42 days'),
+            const SizedBox(height: 13),
+            const _SettingsMiniStat(label: 'Meal logged', value: '156'),
+          ],
+        ),
+      ),
+    );
+  }
+
+  String _initials(String value) {
+    final parts = value
+        .trim()
+        .split(RegExp(r'\s+'))
+        .where((part) => part.isNotEmpty)
+        .toList();
+    if (parts.isEmpty) {
+      return 'NA';
+    }
+    return parts.take(2).map((part) => part[0].toUpperCase()).join();
+  }
+}
+
+class _SettingsMiniStat extends StatelessWidget {
+  const _SettingsMiniStat({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(
+          child: Text(
+            label,
+            style: const TextStyle(
+              color: Color(0xFF667085),
+              fontSize: 11,
+              fontWeight: FontWeight.w500,
             ),
           ),
         ),
-        const SizedBox(height: 18),
-        const _SystemInfoPanel(
+        Text(
+          value,
+          style: const TextStyle(
+            color: Colors.black,
+            fontSize: 11,
+            fontWeight: FontWeight.w900,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _SettingsAboutCard extends StatelessWidget {
+  const _SettingsAboutCard();
+
+  @override
+  Widget build(BuildContext context) {
+    return _FoodLogPanel(
+      child: const Padding(
+        padding: EdgeInsets.fromLTRB(30, 24, 30, 26),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _SystemStatTile(
-              label: 'Design Source',
-              value: 'AI Meal Planning G8',
-              icon: Icons.design_services_outlined,
+            Text(
+              'About NutriAI',
+              style: TextStyle(
+                color: Colors.black,
+                fontSize: 14,
+                fontWeight: FontWeight.w900,
+              ),
             ),
-            _SystemStatTile(
-              label: 'Backend API',
-              value: 'localhost:8000',
-              icon: Icons.cloud_done_outlined,
+            SizedBox(height: 24),
+            _SettingsMiniStat(label: 'Version', value: '1.0.0'),
+            SizedBox(height: 14),
+            _SettingsMiniStat(label: 'Build', value: '2026.02.15'),
+            SizedBox(height: 28),
+            _SettingsLink('Privacy Policy'),
+            SizedBox(height: 16),
+            _SettingsLink('Terms of Service'),
+            SizedBox(height: 16),
+            _SettingsLink('Help & Support'),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SettingsLink extends StatelessWidget {
+  const _SettingsLink(this.label);
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      label,
+      style: const TextStyle(
+        color: Colors.black,
+        fontSize: 11,
+        fontWeight: FontWeight.w900,
+      ),
+    );
+  }
+}
+
+class _SettingsDangerCard extends StatelessWidget {
+  const _SettingsDangerCard({required this.onExport, required this.onLogout});
+
+  final VoidCallback onExport;
+  final VoidCallback onLogout;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFF5F5),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: const Color(0xFFE9B7B7)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(30, 24, 30, 26),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Account Actions',
+              style: TextStyle(
+                color: Color(0xFFFF2525),
+                fontSize: 14,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+            const SizedBox(height: 24),
+            TextButton(
+              onPressed: onExport,
+              style: TextButton.styleFrom(
+                foregroundColor: const Color(0xFFFF2525),
+                padding: EdgeInsets.zero,
+                minimumSize: const Size(0, 28),
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                textStyle: const TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              child: const Text('Export All Data'),
+            ),
+            const SizedBox(height: 8),
+            TextButton(
+              onPressed: onLogout,
+              style: TextButton.styleFrom(
+                foregroundColor: const Color(0xFFFF2525),
+                padding: EdgeInsets.zero,
+                minimumSize: const Size(0, 28),
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                textStyle: const TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              child: const Text('Sign Out'),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SettingsChangePasswordDialog extends StatefulWidget {
+  const _SettingsChangePasswordDialog({
+    required this.apiClient,
+    required this.email,
+  });
+
+  final ApiClient apiClient;
+  final String email;
+
+  @override
+  State<_SettingsChangePasswordDialog> createState() =>
+      _SettingsChangePasswordDialogState();
+}
+
+class _SettingsChangePasswordDialogState
+    extends State<_SettingsChangePasswordDialog> {
+  final _oldPassword = TextEditingController();
+  final _newPassword = TextEditingController();
+  bool _loading = false;
+  String? _error;
+
+  @override
+  void dispose() {
+    _oldPassword.dispose();
+    _newPassword.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    if (_oldPassword.text.isEmpty) {
+      setState(() => _error = 'Current password is required');
+      return;
+    }
+    if (_newPassword.text.length < 8) {
+      setState(() => _error = 'Use at least 8 characters');
+      return;
+    }
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      await widget.apiClient.changePassword(
+        email: widget.email,
+        oldPassword: _oldPassword.text,
+        newPassword: _newPassword.text,
+      );
+      if (mounted) {
+        Navigator.of(context).pop(true);
+      }
+    } catch (error) {
+      setState(() => _error = error.toString());
+    } finally {
+      if (mounted) {
+        setState(() => _loading = false);
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Change password'),
+      content: SizedBox(
+        width: 380,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextFormField(
+              controller: _oldPassword,
+              obscureText: true,
+              decoration: const InputDecoration(labelText: 'Current password'),
+            ),
+            const SizedBox(height: 12),
+            TextFormField(
+              controller: _newPassword,
+              obscureText: true,
+              decoration: const InputDecoration(labelText: 'New password'),
+            ),
+            if (_error != null) ...[
+              const SizedBox(height: 12),
+              ErrorBanner(message: _error!),
+            ],
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: _loading ? null : () => Navigator.of(context).pop(false),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: _loading ? null : _submit,
+          child: Text(_loading ? 'Saving...' : 'Save password'),
+        ),
+      ],
+    );
+  }
+}
+
+class _SettingsExportDialog extends StatelessWidget {
+  const _SettingsExportDialog({required this.data});
+
+  final Map<String, dynamic> data;
+
+  @override
+  Widget build(BuildContext context) {
+    const encoder = JsonEncoder.withIndent('  ');
+    final text = encoder.convert(data);
+    return AlertDialog(
+      title: const Text('Exported data'),
+      content: SizedBox(
+        width: 560,
+        height: 420,
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: const Color(0xFFF7FAF8),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: const Color(0xFFDDE8E1)),
+          ),
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(14),
+            child: SelectableText(
+              text,
+              style: const TextStyle(
+                fontFamily: 'monospace',
+                fontSize: 11,
+                color: Color(0xFF17231F),
+              ),
+            ),
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Close'),
         ),
       ],
     );
@@ -8504,18 +10798,23 @@ class AssistantScreen extends StatefulWidget {
 }
 
 class _AssistantScreenState extends State<AssistantScreen> {
-  final _question = TextEditingController(
-    text: 'Can I eat pizza while dieting?',
-  );
+  final _question = TextEditingController();
   final _weight = TextEditingController(text: '80');
   final _height = TextEditingController(text: '170');
-  String _habits = 'balanced';
-  String _exercise = '3 days per week';
-  String _goal = 'lose_weight';
+  final String _habits = 'balanced';
+  final String _exercise = '3 days per week';
+  final String _goal = 'lose_weight';
   bool _loading = false;
+  bool _recognizing = false;
   String? _error;
-  Map<String, dynamic>? _chat;
   Map<String, dynamic>? _risk;
+  final List<_AssistantChatMessage> _messages = [
+    const _AssistantChatMessage(
+      role: _AssistantRole.assistant,
+      text:
+          'Hi, I am your nutrition assistant. Ask me about meals, calories, dieting, hydration, allergies, or healthier swaps.',
+    ),
+  ];
 
   @override
   void dispose() {
@@ -8525,16 +10824,30 @@ class _AssistantScreenState extends State<AssistantScreen> {
     super.dispose();
   }
 
-  Future<void> _ask() async {
+  Future<void> _ask([String? prompt]) async {
+    final question = (prompt ?? _question.text).trim();
+    if (question.isEmpty) {
+      return;
+    }
     setState(() {
       _loading = true;
       _error = null;
+      _messages.add(
+        _AssistantChatMessage(role: _AssistantRole.user, text: question),
+      );
+      _question.clear();
     });
     try {
-      final result = await widget.apiClient.askNutritionQuestion(
-        _question.text.trim(),
+      final result = await widget.apiClient.askNutritionQuestion(question);
+      setState(
+        () => _messages.add(
+          _AssistantChatMessage(
+            role: _AssistantRole.assistant,
+            text: result['answer']?.toString() ?? 'I could not answer that.',
+            source: result['source']?.toString(),
+          ),
+        ),
       );
-      setState(() => _chat = result);
     } catch (error) {
       setState(() => _error = error.toString());
     } finally {
@@ -8567,106 +10880,1207 @@ class _AssistantScreenState extends State<AssistantScreen> {
     }
   }
 
+  Future<void> _recognizeFoodPhoto() async {
+    setState(() {
+      _recognizing = true;
+      _error = null;
+    });
+    try {
+      final result = await FilePicker.pickFiles(
+        type: FileType.image,
+        withData: true,
+      );
+      final file = result?.files.single;
+      final bytes = file?.bytes;
+      if (file == null || bytes == null) {
+        return;
+      }
+      final recognized = await widget.apiClient.recognizeFoodImage(
+        bytes: bytes,
+        filename: file.name,
+      );
+      final name = recognized['food_name']?.toString() ?? 'food';
+      final calories = recognized['estimated_calories']?.toString() ?? '-';
+      final confidence = _foodNumber(recognized['confidence']);
+      setState(() {
+        _messages.add(
+          _AssistantChatMessage(
+            role: _AssistantRole.user,
+            text: 'Uploaded food photo: ${file.name}',
+          ),
+        );
+        _messages.add(
+          _AssistantChatMessage(
+            role: _AssistantRole.assistant,
+            text: confidence <= 0 || name == 'Unknown Food'
+                ? 'I could not identify that photo reliably. Please enter the food name and serving size manually.'
+                : 'The filename suggests $name ($calories kcal per saved serving), but this is a low-confidence match—not visual recognition.',
+            source: 'food recognition',
+          ),
+        );
+      });
+    } catch (error) {
+      setState(() => _error = error.toString());
+    } finally {
+      if (mounted) {
+        setState(() => _recognizing = false);
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    return PageScaffold(
-      title: 'AI assistant',
-      children: [
-        AppCard(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              SectionTitle(title: 'Nutrition chatbot'),
-              const SizedBox(height: 16),
-              TextFormField(
-                controller: _question,
-                decoration: const InputDecoration(labelText: 'Question'),
-                minLines: 2,
-                maxLines: 4,
-              ),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final wide = constraints.maxWidth >= 1220;
+        final medium = constraints.maxWidth >= 920;
+        final chat = _AssistantChatPanel(
+          messages: _messages,
+          controller: _question,
+          loading: _loading,
+          onAsk: () => _ask(),
+          onPrompt: _ask,
+        );
+        final side = _AssistantCapabilitiesPanel(
+          recognizing: _recognizing,
+          onPrompt: _ask,
+          onUploadPhoto: _recognizeFoodPhoto,
+          risk: _risk,
+          onPredictRisk: _predictRisk,
+        );
+        return ListView(
+          padding: const EdgeInsets.only(bottom: 24),
+          children: [
+            if (_error != null) ...[
+              ErrorBanner(message: _error!),
               const SizedBox(height: 12),
-              FilledButton.icon(
-                onPressed: _loading ? null : _ask,
-                icon: const Icon(Icons.send_outlined),
-                label: const Text('Ask'),
+            ],
+            if (wide)
+              SizedBox(
+                height: 760,
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    SizedBox(
+                      width: 270,
+                      child: _AssistantConversationsPanel(onPrompt: _ask),
+                    ),
+                    const SizedBox(width: 0),
+                    Expanded(child: chat),
+                    const SizedBox(width: 0),
+                    SizedBox(width: 290, child: side),
+                  ],
+                ),
+              )
+            else if (medium)
+              SizedBox(
+                height: 760,
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Expanded(child: chat),
+                    SizedBox(width: 290, child: side),
+                  ],
+                ),
+              )
+            else
+              Column(
+                children: [
+                  SizedBox(height: 680, child: chat),
+                  const SizedBox(height: 16),
+                  side,
+                ],
               ),
-              if (_chat != null) ...[
-                const SizedBox(height: 16),
-                Text(
-                  _chat!['answer'].toString(),
-                  style: Theme.of(context).textTheme.bodyLarge,
+          ],
+        );
+      },
+    );
+  }
+}
+
+enum _AssistantRole { user, assistant }
+
+class _AssistantChatMessage {
+  const _AssistantChatMessage({
+    required this.role,
+    required this.text,
+    this.source,
+  });
+
+  final _AssistantRole role;
+  final String text;
+  final String? source;
+}
+
+class _AssistantConversationsPanel extends StatelessWidget {
+  const _AssistantConversationsPanel({required this.onPrompt});
+
+  final ValueChanged<String> onPrompt;
+
+  @override
+  Widget build(BuildContext context) {
+    final conversations = [
+      (
+        'Breakfast Protein Sources',
+        'What are good protein...',
+        '9:01 AM',
+        'What are good protein sources for breakfast?',
+      ),
+      (
+        'Weekly Meal Plan',
+        'Can you create a 7-day...',
+        'Yesterday',
+        'Can you create a 7-day weekly meal plan?',
+      ),
+      (
+        'Cambodian Food Calories',
+        'How many calories in Lok Lak?',
+        'Mon',
+        'How many calories are in Cambodian beef lok lak?',
+      ),
+      (
+        'Allergy-safe Recipes',
+        'I am allergic to nuts...',
+        'Sun',
+        'Suggest allergy-safe recipes without nuts.',
+      ),
+      (
+        'Weight Loss Tips',
+        'What deficit should I aim for?',
+        'Last week',
+        'What calorie deficit should I aim for?',
+      ),
+    ];
+    return DecoratedBox(
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        border: Border(
+          top: BorderSide(color: Color(0xFFCFE0D6)),
+          left: BorderSide(color: Color(0xFFCFE0D6)),
+          bottom: BorderSide(color: Color(0xFFCFE0D6)),
+        ),
+      ),
+      child: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(14, 16, 14, 12),
+            child: Row(
+              children: [
+                const Expanded(
+                  child: Text(
+                    'Conversations',
+                    style: TextStyle(
+                      color: Color(0xFF111827),
+                      fontSize: 14,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ),
+                FilledButton.icon(
+                  onPressed: () => onPrompt('Start a new nutrition chat.'),
+                  icon: const Icon(Icons.add, size: 14),
+                  label: const Text('New'),
+                  style: FilledButton.styleFrom(
+                    minimumSize: const Size(74, 32),
+                    textStyle: const TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
                 ),
               ],
-            ],
+            ),
           ),
-        ),
-        AppCard(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              SectionTitle(title: 'Health risk'),
-              const SizedBox(height: 16),
-              ResponsiveGrid(
-                minTileWidth: 220,
-                children: [
-                  NumberField(controller: _weight, label: 'Weight kg'),
-                  NumberField(controller: _height, label: 'Height cm'),
-                  TextFormField(
-                    decoration: const InputDecoration(
-                      labelText: 'Eating habits',
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14),
+            child: TextFormField(
+              decoration: InputDecoration(
+                hintText: 'Search chats...',
+                prefixIcon: const Icon(Icons.search, size: 16),
+                filled: true,
+                fillColor: const Color(0xFFEAF7F1),
+                contentPadding: const EdgeInsets.symmetric(vertical: 10),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: BorderSide.none,
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: BorderSide.none,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Expanded(
+            child: ListView.separated(
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              itemCount: conversations.length,
+              separatorBuilder: (_, _) => const SizedBox(height: 4),
+              itemBuilder: (context, index) {
+                final conversation = conversations[index];
+                final active = index == 0;
+                return InkWell(
+                  onTap: () => onPrompt(conversation.$4),
+                  borderRadius: BorderRadius.circular(8),
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: active ? const Color(0xFFE7F8F1) : Colors.white,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                        color: active
+                            ? const Color(0xFF9CDEC5)
+                            : Colors.transparent,
+                      ),
                     ),
-                    initialValue: _habits,
-                    onChanged: (value) => _habits = value,
-                  ),
-                  TextFormField(
-                    decoration: const InputDecoration(
-                      labelText: 'Exercise frequency',
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(10, 10, 10, 10),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  conversation.$1,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    color: active
+                                        ? const Color(0xFF007A4D)
+                                        : const Color(0xFF111827),
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w900,
+                                  ),
+                                ),
+                                const SizedBox(height: 5),
+                                Text(
+                                  conversation.$2,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    color: Color(0xFF667085),
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            conversation.$3,
+                            style: const TextStyle(
+                              color: Color(0xFF8A9791),
+                              fontSize: 9,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                    initialValue: _exercise,
-                    onChanged: (value) => _exercise = value,
                   ),
-                  SelectField(
-                    label: 'Goal',
-                    value: _goal,
-                    values: const [
-                      'lose_weight',
-                      'maintain',
-                      'gain_muscle',
-                      'gain_weight',
+                );
+              },
+            ),
+          ),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
+            decoration: const BoxDecoration(
+              border: Border(top: BorderSide(color: Color(0xFFCFE0D6))),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'TOPICS',
+                  style: TextStyle(
+                    color: Color(0xFF667085),
+                    fontSize: 9,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                GridView.count(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  crossAxisCount: 2,
+                  crossAxisSpacing: 8,
+                  mainAxisSpacing: 8,
+                  childAspectRatio: 2.7,
+                  children: const [
+                    _AssistantTopicTile(
+                      icon: Icons.lightbulb_outline,
+                      label: 'Nutrition Facts',
+                      color: Color(0xFFEAF7F1),
+                    ),
+                    _AssistantTopicTile(
+                      icon: Icons.calendar_month_outlined,
+                      label: 'Meal Planning',
+                      color: Color(0xFFEFFAF6),
+                    ),
+                    _AssistantTopicTile(
+                      icon: Icons.local_fire_department_outlined,
+                      label: 'Calories Tracking',
+                      color: Color(0xFFFFF4E5),
+                    ),
+                    _AssistantTopicTile(
+                      icon: Icons.fitness_center,
+                      label: 'Fitness & Diet',
+                      color: Color(0xFFEFF6FF),
+                    ),
+                    _AssistantTopicTile(
+                      icon: Icons.favorite_border,
+                      label: 'Health Goals',
+                      color: Color(0xFFFFEDF2),
+                    ),
+                    _AssistantTopicTile(
+                      icon: Icons.error_outline,
+                      label: 'Allergies',
+                      color: Color(0xFFFFF8E5),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AssistantTopicTile extends StatelessWidget {
+  const _AssistantTopicTile({
+    required this.icon,
+    required this.label,
+    required this.color,
+  });
+
+  final IconData icon;
+  final String label;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: color,
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(icon, size: 14, color: const Color(0xFF12C48B)),
+          const SizedBox(height: 5),
+          Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              color: Color(0xFF111827),
+              fontSize: 8,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AssistantChatPanel extends StatelessWidget {
+  const _AssistantChatPanel({
+    required this.messages,
+    required this.controller,
+    required this.loading,
+    required this.onAsk,
+    required this.onPrompt,
+  });
+
+  final List<_AssistantChatMessage> messages;
+  final TextEditingController controller;
+  final bool loading;
+  final VoidCallback onAsk;
+  final ValueChanged<String> onPrompt;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: Border.all(color: const Color(0xFFCFE0D6)),
+      ),
+      child: Column(
+        children: [
+          Container(
+            height: 68,
+            padding: const EdgeInsets.symmetric(horizontal: 18),
+            decoration: const BoxDecoration(
+              border: Border(bottom: BorderSide(color: Color(0xFFCFE0D6))),
+            ),
+            child: Row(
+              children: [
+                const Icon(
+                  Icons.chat_bubble_outline,
+                  color: Color(0xFF50615A),
+                  size: 22,
+                ),
+                const SizedBox(width: 12),
+                const CircleAvatar(
+                  radius: 20,
+                  backgroundColor: Color(0xFF12C48B),
+                  child: Icon(
+                    Icons.auto_awesome,
+                    color: Colors.white,
+                    size: 20,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: const [
+                      Text(
+                        'NutriAI Assistant',
+                        style: TextStyle(
+                          color: Color(0xFF111827),
+                          fontSize: 14,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                      SizedBox(height: 2),
+                      Text(
+                        'Online · Powered by AI',
+                        style: TextStyle(
+                          color: Color(0xFF16A05D),
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
                     ],
-                    onChanged: (value) => setState(() => _goal = value),
+                  ),
+                ),
+                const _AssistantMiniMetric(
+                  icon: Icons.local_fire_department_outlined,
+                  label: '1,850 kcal goal',
+                  color: Color(0xFFFF8A00),
+                ),
+                const SizedBox(width: 8),
+                const _AssistantMiniMetric(
+                  icon: Icons.water_drop_outlined,
+                  label: '2.0L water',
+                  color: Color(0xFF36BFFA),
+                ),
+                const SizedBox(width: 8),
+                const _AssistantMiniMetric(
+                  icon: Icons.directions_run,
+                  label: 'Active',
+                  color: Color(0xFF16A05D),
+                ),
+              ],
+            ),
+          ),
+          Expanded(
+            child: ListView.separated(
+              padding: const EdgeInsets.fromLTRB(42, 18, 42, 18),
+              itemCount: messages.length + (loading ? 1 : 0),
+              separatorBuilder: (_, _) => const SizedBox(height: 12),
+              itemBuilder: (context, index) {
+                if (index >= messages.length) {
+                  return const _AssistantTypingBubble();
+                }
+                return _AssistantBubble(message: messages[index]);
+              },
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(28, 0, 28, 12),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  _AssistantPromptChip(
+                    label: 'Plan my meals for this week',
+                    onTap: () => onPrompt('Plan my meals for this week.'),
+                  ),
+                  _AssistantPromptChip(
+                    label: 'Analyze my diet',
+                    onTap: () => onPrompt('Analyze my diet today.'),
+                  ),
+                  _AssistantPromptChip(
+                    label: 'Find high-protein foods',
+                    onTap: () => onPrompt('Find high-protein foods for me.'),
                   ),
                 ],
               ),
-              const SizedBox(height: 12),
-              OutlinedButton.icon(
-                onPressed: _loading ? null : _predictRisk,
-                icon: const Icon(Icons.health_and_safety_outlined),
-                label: const Text('Predict risk'),
-              ),
-              if (_risk != null) ...[
-                const SizedBox(height: 16),
-                StatTile(
-                  label: _risk!['risk_level'].toString(),
-                  value: 'BMI ${_risk!['bmi']}',
-                  icon: Icons.monitor_heart_outlined,
+            ),
+          ),
+          Container(
+            padding: const EdgeInsets.fromLTRB(28, 12, 28, 8),
+            decoration: const BoxDecoration(
+              border: Border(top: BorderSide(color: Color(0xFFCFE0D6))),
+            ),
+            child: Column(
+              children: [
+                DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF8FAFC),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: const Color(0xFFCFE0D6)),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 10,
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        const Icon(
+                          Icons.image_outlined,
+                          color: Color(0xFF667085),
+                          size: 20,
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: TextFormField(
+                            controller: controller,
+                            minLines: 2,
+                            maxLines: 4,
+                            decoration: const InputDecoration(
+                              hintText:
+                                  'Ask about nutrition, meal plans, Cambodian foods...',
+                              border: InputBorder.none,
+                              enabledBorder: InputBorder.none,
+                              focusedBorder: InputBorder.none,
+                              contentPadding: EdgeInsets.zero,
+                            ),
+                            onFieldSubmitted: (_) {
+                              if (!loading) {
+                                onAsk();
+                              }
+                            },
+                          ),
+                        ),
+                        IconButton(
+                          tooltip: 'Voice input',
+                          onPressed: null,
+                          icon: const Icon(Icons.mic_none, size: 20),
+                        ),
+                        FilledButton(
+                          onPressed: loading ? null : onAsk,
+                          style: FilledButton.styleFrom(
+                            minimumSize: const Size(42, 42),
+                            padding: EdgeInsets.zero,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                          ),
+                          child: const Icon(Icons.send_outlined, size: 19),
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
-                const SizedBox(height: 12),
-                ...(_risk!['recommendations'] as List<dynamic>).map(
-                  (item) => ListTile(
-                    leading: const Icon(Icons.check_circle_outline),
-                    title: Text(item.toString()),
+                const SizedBox(height: 7),
+                const Text(
+                  'NutriAI may make mistakes. Consult a dietitian for medical nutrition advice.',
+                  style: TextStyle(
+                    color: Color(0xFF8A9791),
+                    fontSize: 9,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
               ],
-              if (_error != null) ...[
-                const SizedBox(height: 12),
-                ErrorBanner(message: _error!),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AssistantMiniMetric extends StatelessWidget {
+  const _AssistantMiniMetric({
+    required this.icon,
+    required this.label,
+    required this.color,
+  });
+
+  final IconData icon;
+  final String label;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: const Color(0xFFF3FAF6),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 11, color: color),
+            const SizedBox(width: 4),
+            Text(
+              label,
+              style: const TextStyle(
+                color: Color(0xFF667085),
+                fontSize: 9,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _AssistantPromptChip extends StatelessWidget {
+  const _AssistantPromptChip({required this.label, required this.onTap});
+
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return ActionChip(
+      label: Text(label),
+      avatar: const Icon(Icons.auto_awesome, size: 15),
+      onPressed: onTap,
+      backgroundColor: const Color(0xFFEAF7F1),
+      side: const BorderSide(color: Color(0xFFCFE4D6)),
+      labelStyle: const TextStyle(
+        color: Color(0xFF0C3B2E),
+        fontSize: 11,
+        fontWeight: FontWeight.w800,
+      ),
+    );
+  }
+}
+
+class _AssistantBubble extends StatelessWidget {
+  const _AssistantBubble({required this.message});
+
+  final _AssistantChatMessage message;
+
+  @override
+  Widget build(BuildContext context) {
+    final isUser = message.role == _AssistantRole.user;
+    return Align(
+      alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 620),
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: isUser ? const Color(0xFF16A05D) : Colors.white,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(
+              color: isUser ? const Color(0xFF16A05D) : const Color(0xFFE4E7EC),
+            ),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  message.text,
+                  style: TextStyle(
+                    color: isUser ? Colors.white : const Color(0xFF111827),
+                    fontSize: 13,
+                    height: 1.35,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                if (!isUser && message.source != null) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    'Source: ${message.source}',
+                    style: const TextStyle(
+                      color: Color(0xFF667085),
+                      fontSize: 10,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
               ],
-            ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _AssistantTypingBubble extends StatelessWidget {
+  const _AssistantTypingBubble();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Align(
+      alignment: Alignment.centerLeft,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.all(Radius.circular(8)),
+          border: Border.fromBorderSide(BorderSide(color: Color(0xFFE4E7EC))),
+        ),
+        child: Padding(
+          padding: EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          child: Text(
+            'NutriAI is thinking...',
+            style: TextStyle(
+              color: Color(0xFF667085),
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _AssistantCapabilitiesPanel extends StatelessWidget {
+  const _AssistantCapabilitiesPanel({
+    required this.recognizing,
+    required this.onPrompt,
+    required this.onUploadPhoto,
+    required this.risk,
+    required this.onPredictRisk,
+  });
+
+  final bool recognizing;
+  final ValueChanged<String> onPrompt;
+  final VoidCallback onUploadPhoto;
+  final Map<String, dynamic>? risk;
+  final VoidCallback onPredictRisk;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: const BoxDecoration(
+        color: Color(0xFFF8FAFC),
+        border: Border(
+          top: BorderSide(color: Color(0xFFCFE0D6)),
+          right: BorderSide(color: Color(0xFFCFE0D6)),
+          bottom: BorderSide(color: Color(0xFFCFE0D6)),
+        ),
+      ),
+      child: ListView(
+        padding: const EdgeInsets.fromLTRB(18, 16, 18, 18),
+        children: [
+          const _AssistantSideTitle('AI Capabilities'),
+          const SizedBox(height: 14),
+          _AssistantCapabilityCard(
+            icon: Icons.chat_outlined,
+            title: 'Nutrition Q&A',
+            subtitle: 'Calories, macros, vitamins, minerals',
+            onTap: () => onPrompt('Answer a nutrition question for me.'),
+          ),
+          const SizedBox(height: 10),
+          _AssistantCapabilityCard(
+            icon: Icons.camera_alt_outlined,
+            title: 'Food Recognition',
+            subtitle: 'Upload a photo to identify foods',
+            onTap: onUploadPhoto,
+          ),
+          const SizedBox(height: 10),
+          _AssistantCapabilityCard(
+            icon: Icons.menu_book_outlined,
+            title: 'Meal Planning',
+            subtitle: 'Personalized weekly meal plans',
+            onTap: () => onPrompt('Create a personalized weekly meal plan.'),
+          ),
+          const SizedBox(height: 20),
+          _AssistantContextCard(risk: risk, onPredictRisk: onPredictRisk),
+          const SizedBox(height: 20),
+          DecoratedBox(
+            decoration: BoxDecoration(
+              color: const Color(0xFFEFF8F3),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: const Color(0xFFCFE0D6)),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(14),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Row(
+                    children: [
+                      Icon(
+                        Icons.add_a_photo_outlined,
+                        color: Color(0xFF12C48B),
+                        size: 20,
+                      ),
+                      SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Calorie Estimator',
+                          style: TextStyle(
+                            color: Color(0xFF111827),
+                            fontSize: 13,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  const Text(
+                    'Take a photo of your meal and get instant nutrition estimates.',
+                    style: TextStyle(
+                      color: Color(0xFF667085),
+                      fontSize: 11,
+                      height: 1.35,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton.icon(
+                      onPressed: recognizing ? null : onUploadPhoto,
+                      icon: Icon(
+                        recognizing
+                            ? Icons.hourglass_empty
+                            : Icons.upload_outlined,
+                        size: 15,
+                      ),
+                      label: Text(
+                        recognizing ? 'Analyzing...' : 'Upload Food Photo',
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 18),
+          const _AssistantSideTitle('Tips', small: true),
+          const SizedBox(height: 10),
+          _AssistantTipTile(
+            icon: Icons.schedule,
+            text: 'Ask about meal timing for better energy',
+            onTap: () =>
+                onPrompt('What is the best meal timing for better energy?'),
+          ),
+          _AssistantTipTile(
+            icon: Icons.fitness_center,
+            text: 'Mention your workout for tailored macros',
+            onTap: () => onPrompt('Tailor my macros for my workout routine.'),
+          ),
+          _AssistantTipTile(
+            icon: Icons.favorite_border,
+            text: 'Share health goals for personalized plans',
+            onTap: () => onPrompt('Help me plan based on my health goals.'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AssistantSideTitle extends StatelessWidget {
+  const _AssistantSideTitle(this.title, {this.small = false});
+
+  final String title;
+  final bool small;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Icon(
+          small ? Icons.lightbulb_outline : Icons.bolt,
+          size: small ? 14 : 16,
+          color: const Color(0xFF007A4D),
+        ),
+        const SizedBox(width: 8),
+        Text(
+          title,
+          style: TextStyle(
+            color: const Color(0xFF111827),
+            fontSize: small ? 12 : 15,
+            fontWeight: FontWeight.w900,
           ),
         ),
       ],
+    );
+  }
+}
+
+class _AssistantCapabilityCard extends StatelessWidget {
+  const _AssistantCapabilityCard({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: const Color(0xFFC9DCD3)),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Row(
+            children: [
+              DecoratedBox(
+                decoration: BoxDecoration(
+                  color: const Color(0xFFDDF7EA),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: SizedBox(
+                  width: 36,
+                  height: 36,
+                  child: Icon(icon, size: 20, color: const Color(0xFF00865A)),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: const TextStyle(
+                        color: Color(0xFF111827),
+                        fontSize: 12,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      subtitle,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: Color(0xFF667085),
+                        fontSize: 10,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _AssistantContextCard extends StatelessWidget {
+  const _AssistantContextCard({
+    required this.risk,
+    required this.onPredictRisk,
+  });
+
+  final Map<String, dynamic>? risk;
+  final VoidCallback onPredictRisk;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: const Color(0xFFC9DCD3)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              "Today's Context",
+              style: TextStyle(
+                color: Color(0xFF111827),
+                fontSize: 15,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+            const SizedBox(height: 14),
+            const _AssistantMacroRow(
+              label: 'Calories',
+              value: '1,240 / 1,850',
+              progress: .67,
+              color: Color(0xFFFF8A00),
+            ),
+            const _AssistantMacroRow(
+              label: 'Protein',
+              value: '58g / 120g',
+              progress: .48,
+              color: Color(0xFF4C9AFF),
+            ),
+            const _AssistantMacroRow(
+              label: 'Carbs',
+              value: '142g / 230g',
+              progress: .62,
+              color: Color(0xFFFFB000),
+            ),
+            const _AssistantMacroRow(
+              label: 'Fat',
+              value: '34g / 60g',
+              progress: .57,
+              color: Color(0xFFFF5D7A),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              risk == null
+                  ? 'AI uses this context to give you personalized advice.'
+                  : 'Latest risk: ${risk!['risk_level']} · BMI ${risk!['bmi']}',
+              style: const TextStyle(
+                color: Color(0xFF8A9791),
+                fontSize: 9,
+                height: 1.35,
+                fontStyle: FontStyle.italic,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 10),
+            TextButton.icon(
+              onPressed: onPredictRisk,
+              icon: const Icon(Icons.health_and_safety_outlined, size: 14),
+              label: const Text('Check health risk'),
+              style: TextButton.styleFrom(
+                foregroundColor: const Color(0xFF007A4D),
+                visualDensity: VisualDensity.compact,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _AssistantMacroRow extends StatelessWidget {
+  const _AssistantMacroRow({
+    required this.label,
+    required this.value,
+    required this.progress,
+    required this.color,
+  });
+
+  final String label;
+  final String value;
+  final double progress;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 11),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  label,
+                  style: const TextStyle(
+                    color: Color(0xFF667085),
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              Text(
+                value,
+                style: const TextStyle(
+                  color: Color(0xFF111827),
+                  fontSize: 10,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 5),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(999),
+            child: LinearProgressIndicator(
+              value: progress,
+              minHeight: 6,
+              backgroundColor: const Color(0xFFE9EEF0),
+              color: color,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AssistantTipTile extends StatelessWidget {
+  const _AssistantTipTile({
+    required this.icon,
+    required this.text,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String text;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 9),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(8),
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: const Color(0xFFE4E7EC)),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+            child: Row(
+              children: [
+                Icon(icon, size: 15, color: const Color(0xFF007A4D)),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    text,
+                    style: const TextStyle(
+                      color: Color(0xFF667085),
+                      fontSize: 10,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
@@ -8686,6 +12100,7 @@ class _ProgressScreenState extends State<ProgressScreen> {
   final _water = TextEditingController(text: '250');
   Map<String, dynamic>? _progress;
   Map<String, dynamic>? _waterLog;
+  List<Map<String, dynamic>> _waterHistory = [];
   bool _loading = false;
   String? _error;
 
@@ -8708,9 +12123,11 @@ class _ProgressScreenState extends State<ProgressScreen> {
     try {
       final progress = await widget.apiClient.weightProgress();
       final water = await widget.apiClient.waterLog(todayIsoDate());
+      final waterHistory = await widget.apiClient.waterLogs(days: 7);
       setState(() {
         _progress = progress;
         _waterLog = water;
+        _waterHistory = waterHistory;
         _error = null;
       });
     } catch (error) {
@@ -8731,7 +12148,9 @@ class _ProgressScreenState extends State<ProgressScreen> {
   }
 
   Future<void> _recordWater() async {
-    await widget.apiClient.logWater(double.tryParse(_water.text) ?? 0);
+    final addAmount = double.tryParse(_water.text) ?? 0;
+    final currentAmount = _foodNumber(_waterLog?['amount_ml']);
+    await widget.apiClient.logWater(currentAmount + addAmount);
     await _load();
   }
 
@@ -8751,6 +12170,9 @@ class _ProgressScreenState extends State<ProgressScreen> {
     final waterAmount = _foodNumber(_waterLog?['amount_ml']);
     final recommendedWater = _foodNumber(_waterLog?['recommended_ml']);
     final waterRemaining = math.max(0.0, recommendedWater - waterAmount);
+    final waterPercent = recommendedWater <= 0
+        ? 0.0
+        : ((waterAmount / recommendedWater) * 100).clamp(0, 100).toDouble();
     final lost = startWeight == 0 || currentWeight == 0
         ? 0.0
         : startWeight - currentWeight;
@@ -8820,7 +12242,8 @@ class _ProgressScreenState extends State<ProgressScreen> {
                   value: recommendedWater == 0
                       ? 0.0
                       : waterAmount / recommendedWater,
-                  caption: '${_formatFoodNumber(waterRemaining)} ml remaining',
+                  caption:
+                      '${_formatFoodNumber(waterRemaining)} ml remaining • ${_formatFoodNumber(waterPercent)}%',
                   color: const Color(0xFF36BFFA),
                 ),
               ),
@@ -8843,17 +12266,27 @@ class _ProgressScreenState extends State<ProgressScreen> {
               children: [
                 _ProgressPanel(
                   title: 'Weight Progress',
-                  child: _WeightProgressChart(
-                    history: history,
-                    startWeight: startWeight,
-                    currentWeight: currentWeight,
-                    targetWeight: targetWeight,
+                  child: Column(
+                    children: [
+                      _WeightProgressChart(
+                        history: history,
+                        startWeight: startWeight,
+                        currentWeight: currentWeight,
+                        targetWeight: targetWeight,
+                      ),
+                      const SizedBox(height: 18),
+                      _RecentWeightEntries(history: history),
+                    ],
                   ),
                 ),
                 const SizedBox(height: 20),
                 _ProgressPanel(
                   title: 'Weekly Water Intake',
-                  child: _WeeklyWaterChart(todayAmount: waterAmount),
+                  child: _WeeklyWaterChart(
+                    logs: _waterHistory,
+                    todayAmount: waterAmount,
+                    recommendedAmount: recommendedWater,
+                  ),
                 ),
               ],
             );
@@ -9220,8 +12653,28 @@ class _WeightProgressChart extends StatelessWidget {
         SizedBox(
           height: 235,
           width: double.infinity,
-          child: CustomPaint(painter: _WeightChartPainter(values: values)),
+          child: CustomPaint(
+            painter: _WeightChartPainter(
+              history: history,
+              values: values,
+              targetWeight: targetWeight,
+            ),
+          ),
         ),
+        if (history.length < 2) ...[
+          const SizedBox(height: 8),
+          const Align(
+            alignment: Alignment.centerLeft,
+            child: Text(
+              'Log weight on another date to draw a trend line.',
+              style: TextStyle(
+                color: Color(0xFF667085),
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
         const SizedBox(height: 16),
         Row(
           children: [
@@ -9309,10 +12762,99 @@ class _WeightSummaryBox extends StatelessWidget {
   }
 }
 
-class _WeightChartPainter extends CustomPainter {
-  const _WeightChartPainter({required this.values});
+class _RecentWeightEntries extends StatelessWidget {
+  const _RecentWeightEntries({required this.history});
 
+  final List<Map<String, dynamic>> history;
+
+  @override
+  Widget build(BuildContext context) {
+    final recent = history.reversed.take(5).toList();
+    if (recent.isEmpty) {
+      return const _SystemEmptyState(
+        icon: Icons.monitor_weight_outlined,
+        title: 'No weight logs yet',
+        message: 'Log your weight to start building a trend.',
+      );
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Align(
+          alignment: Alignment.centerLeft,
+          child: Text(
+            'Recent entries',
+            style: TextStyle(
+              color: Color(0xFF667085),
+              fontSize: 11,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+        ),
+        const SizedBox(height: 10),
+        ...recent.map((entry) {
+          final weight = _formatFoodNumber(_foodNumber(entry['weight_kg']));
+          final date = entry['recorded_date']?.toString() ?? '';
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: const Color(0xFFF8FAFC),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: const Color(0xFFE4E7EC)),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 10,
+                ),
+                child: Row(
+                  children: [
+                    const Icon(
+                      Icons.monitor_weight_outlined,
+                      size: 16,
+                      color: Color(0xFF16A05D),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        date,
+                        style: const TextStyle(
+                          color: Color(0xFF667085),
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                    Text(
+                      '$weight kg',
+                      style: const TextStyle(
+                        color: Color(0xFF111827),
+                        fontSize: 12,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          );
+        }),
+      ],
+    );
+  }
+}
+
+class _WeightChartPainter extends CustomPainter {
+  const _WeightChartPainter({
+    required this.history,
+    required this.values,
+    required this.targetWeight,
+  });
+
+  final List<Map<String, dynamic>> history;
   final List<double> values;
+  final double targetWeight;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -9324,10 +12866,15 @@ class _WeightChartPainter extends CustomPainter {
       ..strokeWidth = 2.3
       ..style = PaintingStyle.stroke;
     final dotPaint = Paint()..color = const Color(0xFF16A05D);
-    final left = 18.0;
+    final targetPaint = Paint()
+      ..color = const Color(0xFF94A3B8)
+      ..strokeWidth = 1.2
+      ..style = PaintingStyle.stroke;
+    final left = 46.0;
     final right = size.width - 18;
     final top = 10.0;
     final bottom = size.height - 28;
+    final textPainter = TextPainter(textDirection: TextDirection.ltr);
 
     for (var i = 0; i < 5; i++) {
       final y = top + (bottom - top) * i / 4;
@@ -9338,97 +12885,282 @@ class _WeightChartPainter extends CustomPainter {
     if (cleanValues.isEmpty) {
       return;
     }
-    final minValue = cleanValues.reduce(math.min);
-    final maxValue = cleanValues.reduce(math.max);
+    final scaleValues = [...cleanValues, if (targetWeight > 0) targetWeight];
+    final rawMin = scaleValues.reduce(math.min);
+    final rawMax = scaleValues.reduce(math.max);
+    final padding = math.max(1.0, (rawMax - rawMin).abs() * 0.15);
+    final minValue = rawMin - padding;
+    final maxValue = rawMax + padding;
     final range = math.max(1, maxValue - minValue);
+
+    double yForValue(double value) {
+      return bottom - ((value - minValue) / range) * (bottom - top);
+    }
+
+    for (var i = 0; i < 5; i++) {
+      final value = maxValue - range * i / 4;
+      final y = top + (bottom - top) * i / 4;
+      textPainter.text = TextSpan(
+        text: '${_formatFoodNumber(value)} kg',
+        style: const TextStyle(color: Color(0xFF667085), fontSize: 9),
+      );
+      textPainter.layout(maxWidth: left - 8);
+      textPainter.paint(canvas, Offset(0, y - textPainter.height / 2));
+    }
+
+    if (targetWeight > 0) {
+      final targetY = yForValue(targetWeight);
+      _drawDashedLine(
+        canvas,
+        Offset(left, targetY),
+        Offset(right, targetY),
+        targetPaint,
+      );
+      textPainter.text = const TextSpan(
+        text: 'Target',
+        style: TextStyle(color: Color(0xFF64748B), fontSize: 9),
+      );
+      textPainter.layout();
+      textPainter.paint(
+        canvas,
+        Offset(right - textPainter.width, targetY - 14),
+      );
+    }
+
     final points = <Offset>[];
     for (var i = 0; i < cleanValues.length; i++) {
       final x = cleanValues.length == 1
-          ? (left + right) / 2
+          ? right
           : left + (right - left) * i / (cleanValues.length - 1);
-      final y = bottom - ((cleanValues[i] - minValue) / range) * (bottom - top);
+      final y = yForValue(cleanValues[i]);
       points.add(Offset(x, y));
     }
-    final path = Path()..moveTo(points.first.dx, points.first.dy);
-    for (final point in points.skip(1)) {
-      path.lineTo(point.dx, point.dy);
+    if (points.length > 1) {
+      final path = Path()..moveTo(points.first.dx, points.first.dy);
+      for (final point in points.skip(1)) {
+        path.lineTo(point.dx, point.dy);
+      }
+      canvas.drawPath(path, linePaint);
     }
-    canvas.drawPath(path, linePaint);
     for (final point in points) {
       canvas.drawCircle(point, 3.5, dotPaint);
     }
 
-    final labels = ['Jan 1', 'Jan 15', 'Jan 29', 'Feb 12', 'Today'];
-    final textPainter = TextPainter(textDirection: TextDirection.ltr);
+    final labels = _dateLabels(cleanValues.length);
     for (var i = 0; i < labels.length; i++) {
-      final x = left + (right - left) * i / (labels.length - 1);
+      final x = labels.length == 1
+          ? right
+          : left + (right - left) * i / (labels.length - 1);
       textPainter.text = TextSpan(
         text: labels[i],
         style: const TextStyle(color: Color(0xFF667085), fontSize: 9),
       );
       textPainter.layout();
-      textPainter.paint(canvas, Offset(x - textPainter.width / 2, bottom + 14));
+      final labelX = (x - textPainter.width / 2).clamp(
+        0.0,
+        size.width - textPainter.width,
+      );
+      textPainter.paint(canvas, Offset(labelX, bottom + 14));
+    }
+  }
+
+  List<String> _dateLabels(int count) {
+    if (history.isEmpty) {
+      return count <= 1 ? ['Today'] : ['Start', 'Today'];
+    }
+    return history.map((entry) {
+      final raw = entry['recorded_date']?.toString() ?? '';
+      final parsed = DateTime.tryParse(raw);
+      if (parsed == null) {
+        return raw;
+      }
+      return '${_monthLabel(parsed.month)} ${parsed.day}';
+    }).toList();
+  }
+
+  String _monthLabel(int month) {
+    const labels = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
+    ];
+    return labels[(month - 1).clamp(0, labels.length - 1)];
+  }
+
+  void _drawDashedLine(Canvas canvas, Offset start, Offset end, Paint paint) {
+    const dashWidth = 6.0;
+    const dashSpace = 5.0;
+    var distance = 0.0;
+    final total = (end - start).distance;
+    final direction = (end - start) / total;
+    while (distance < total) {
+      final next = math.min(distance + dashWidth, total);
+      canvas.drawLine(
+        start + direction * distance,
+        start + direction * next,
+        paint,
+      );
+      distance += dashWidth + dashSpace;
     }
   }
 
   @override
   bool shouldRepaint(covariant _WeightChartPainter oldDelegate) {
-    return oldDelegate.values != values;
+    return oldDelegate.values != values ||
+        oldDelegate.history != history ||
+        oldDelegate.targetWeight != targetWeight;
   }
 }
 
 class _WeeklyWaterChart extends StatelessWidget {
-  const _WeeklyWaterChart({required this.todayAmount});
+  const _WeeklyWaterChart({
+    required this.logs,
+    required this.todayAmount,
+    required this.recommendedAmount,
+  });
 
+  final List<Map<String, dynamic>> logs;
   final double todayAmount;
+  final double recommendedAmount;
 
   @override
   Widget build(BuildContext context) {
-    final baseline = todayAmount <= 0 ? 1200.0 : todayAmount;
-    final values = [
-      baseline * 0.75,
-      baseline * 0.95,
-      baseline * 0.68,
-      baseline * 1.12,
-      baseline * 0.88,
-      baseline * 1.03,
-      baseline * 0.82,
-    ];
-    final maxValue = values.reduce(math.max);
-    const labels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-    return SizedBox(
-      height: 190,
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: List.generate(values.length, (index) {
-          final height = 34 + (values[index] / maxValue) * 100;
-          return Expanded(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                DecoratedBox(
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFBFEAFF),
-                    borderRadius: BorderRadius.circular(7),
-                  ),
-                  child: SizedBox(width: 34, height: height),
+    final valuesByDate = {
+      for (final log in logs)
+        if (log['log_date'] != null)
+          log['log_date'].toString(): _foodNumber(log['amount_ml']),
+    };
+    final today = DateTime.now();
+    final days = List.generate(7, (index) {
+      final date = today.subtract(Duration(days: 6 - index));
+      final key =
+          '${date.year.toString().padLeft(4, '0')}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+      return _WaterDay(
+        label: _weekdayLabel(date.weekday),
+        amount: key == todayIsoDate()
+            ? math.max(todayAmount, valuesByDate[key] ?? 0)
+            : valuesByDate[key] ?? 0,
+      );
+    });
+    final maxAmount = math.max(
+      recommendedAmount,
+      days.map((day) => day.amount).fold<double>(0, math.max),
+    );
+    final average = days.isEmpty
+        ? 0.0
+        : days.fold<double>(0, (sum, day) => sum + day.amount) / days.length;
+    final goalDays = recommendedAmount <= 0
+        ? 0
+        : days.where((day) => day.amount >= recommendedAmount).length;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(
+          height: 190,
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: days.map((day) {
+              final percent = maxAmount <= 0 ? 0.0 : day.amount / maxAmount;
+              final height = day.amount <= 0 ? 8.0 : 24 + percent * 110;
+              final hitGoal =
+                  recommendedAmount > 0 && day.amount >= recommendedAmount;
+              return Expanded(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    Text(
+                      _formatFoodNumber(day.amount),
+                      style: const TextStyle(
+                        color: Color(0xFF667085),
+                        fontSize: 9,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    DecoratedBox(
+                      decoration: BoxDecoration(
+                        color: hitGoal
+                            ? const Color(0xFF36BFFA)
+                            : const Color(0xFFBFEAFF),
+                        borderRadius: BorderRadius.circular(7),
+                      ),
+                      child: SizedBox(width: 34, height: height),
+                    ),
+                    const SizedBox(height: 10),
+                    Text(
+                      day.label,
+                      style: const TextStyle(
+                        color: Color(0xFF667085),
+                        fontSize: 10,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 10),
-                Text(
-                  labels[index],
-                  style: const TextStyle(
-                    color: Color(0xFF667085),
-                    fontSize: 10,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ],
+              );
+            }).toList(),
+          ),
+        ),
+        const SizedBox(height: 14),
+        Row(
+          children: [
+            Expanded(
+              child: _WeightSummaryBox(
+                label: '7-day avg',
+                value: '${_formatFoodNumber(average)} ml',
+              ),
             ),
-          );
-        }),
-      ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: _WeightSummaryBox(
+                label: 'Goal days',
+                value: '$goalDays / 7',
+                highlighted: goalDays > 0,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: _WeightSummaryBox(
+                label: 'Daily goal',
+                value: recommendedAmount <= 0
+                    ? '-'
+                    : '${_formatFoodNumber(recommendedAmount)} ml',
+              ),
+            ),
+          ],
+        ),
+      ],
     );
   }
+
+  String _weekdayLabel(int weekday) {
+    const labels = {
+      DateTime.monday: 'Mon',
+      DateTime.tuesday: 'Tue',
+      DateTime.wednesday: 'Wed',
+      DateTime.thursday: 'Thu',
+      DateTime.friday: 'Fri',
+      DateTime.saturday: 'Sat',
+      DateTime.sunday: 'Sun',
+    };
+    return labels[weekday] ?? '';
+  }
+}
+
+class _WaterDay {
+  const _WaterDay({required this.label, required this.amount});
+
+  final String label;
+  final double amount;
 }
 
 class _WaterPresetButton extends StatelessWidget {
@@ -10107,19 +13839,23 @@ class ErrorView extends StatelessWidget {
 class _DashboardData {
   _DashboardData({
     required this.profile,
+    required this.goal,
     required this.foods,
     required this.summary,
     required this.logs,
     required this.progress,
     required this.water,
+    required this.weeklySummaries,
   });
 
   final Map<String, dynamic> profile;
+  final Map<String, dynamic> goal;
   final List<Map<String, dynamic>> foods;
   final Map<String, dynamic> summary;
   final List<Map<String, dynamic>> logs;
   final Map<String, dynamic> progress;
   final Map<String, dynamic> water;
+  final List<Map<String, dynamic>> weeklySummaries;
 }
 
 String? _required(String? value) {

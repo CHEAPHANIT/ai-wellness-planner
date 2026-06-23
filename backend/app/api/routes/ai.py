@@ -1,9 +1,11 @@
-from datetime import date
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
-from fastapi import APIRouter, Depends, File, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db
+from app.core.config import settings
 from app.models.user import User
 from app.models.chatbot import ChatbotMessage
 from app.models.health_risk_prediction import HealthRiskPrediction
@@ -22,6 +24,7 @@ from app.schemas.ai import (
 )
 from app.services.calorie_model import CaloriePredictionService
 from app.services.chatbot import NutritionChatbot
+from app.services.food_substitute import FoodSubstitutionService
 from app.services.health_risk import HealthRiskService
 from app.services.image_recognition import FoodImageRecognitionService
 from app.services.meal_recommender import MealRecommendationService
@@ -52,7 +55,13 @@ async def recognize_food_image(
     db: Session = Depends(get_db),
     _: User = Depends(get_current_user),
 ) -> FoodImageRecognitionResponse:
+    if image.content_type and not image.content_type.startswith("image/"):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Upload must be an image file")
     content = await image.read()
+    if not content:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Uploaded image is empty")
+    if len(content) > 10 * 1024 * 1024:
+        raise HTTPException(status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail="Image must be 10 MB or smaller")
     return FoodImageRecognitionService(db).recognize(content, image.filename or "food-image")
 
 
@@ -64,7 +73,10 @@ def nutrition_chat(
 ) -> ChatResponse:
     summary = (
         db.query(NutritionLog)
-        .filter(NutritionLog.user_id == current_user.id, NutritionLog.log_date == date.today())
+        .filter(
+            NutritionLog.user_id == current_user.id,
+            NutritionLog.log_date == datetime.now(ZoneInfo(settings.app_timezone)).date(),
+        )
         .first()
     )
     response = NutritionChatbot().answer(payload, current_user, summary.calories_total if summary else None)
@@ -103,14 +115,9 @@ def predict_health_risk(
 @router.get("/substitutes/{food_name}", response_model=SubstituteResponse)
 def recommend_substitutes(
     food_name: str,
-    _: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ) -> SubstituteResponse:
-    substitutions = {
-        "milk": ["Soy milk", "Almond milk", "Oat milk"],
-        "beef": ["Chicken", "Fish", "Tofu"],
-        "rice": ["Brown rice", "Sweet potato", "Quinoa"],
-        "peanut": ["Sunflower seeds", "Pumpkin seeds", "Roasted chickpeas"],
-        "pizza": ["Chicken rice bowl", "Vegetable wrap", "Grilled fish with rice"],
-    }
-    alternatives = substitutions.get(food_name.lower(), ["Grilled fish", "Chicken", "Vegetables", "Rice"])
+    allergies = [allergy.ingredient.lower() for allergy in current_user.allergies]
+    alternatives = FoodSubstitutionService(db).recommend(food_name, allergies)
     return SubstituteResponse(food=food_name, alternatives=alternatives)

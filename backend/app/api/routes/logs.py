@@ -39,13 +39,16 @@ def create_food_log(
     if food is None:
         raise HTTPException(status_code=404, detail="Food was not found")
 
+    logged_at = datetime.now(timezone.utc)
+    if payload.log_date is not None:
+        logged_at = datetime.combine(payload.log_date, time(hour=12), tzinfo=timezone.utc)
     log = FoodLog(
         user_id=current_user.id,
         food_id=payload.food_id,
         meal_type=payload.meal_type,
         quantity=payload.quantity,
         notes=payload.notes,
-        logged_at=datetime.now(timezone.utc),
+        logged_at=logged_at,
     )
     db.add(log)
     db.flush()
@@ -53,6 +56,27 @@ def create_food_log(
     db.commit()
     db.refresh(log)
     return log
+
+
+@router.delete("/food/{log_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_food_log(
+    log_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> None:
+    log = (
+        db.query(FoodLog)
+        .filter(FoodLog.id == log_id, FoodLog.user_id == current_user.id)
+        .first()
+    )
+    if log is None:
+        raise HTTPException(status_code=404, detail="Food log was not found")
+
+    log_date = log.logged_at.date()
+    db.delete(log)
+    db.flush()
+    _update_daily_nutrition(db, current_user.id, log_date)
+    db.commit()
 
 
 @router.get("/nutrition/{log_date}", response_model=NutritionSummary)
