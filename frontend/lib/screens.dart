@@ -19,6 +19,27 @@ const _amber = Color(0xFFF2A93B);
 const _coral = Color(0xFFE76F51);
 const _blue = Color(0xFF3178C6);
 
+bool _isDark(BuildContext context) =>
+    Theme.of(context).brightness == Brightness.dark;
+
+Color _appBackground(BuildContext context) =>
+    _isDark(context) ? const Color(0xFF0F1513) : const Color(0xFFF5F7FA);
+
+Color _appSurface(BuildContext context) =>
+    _isDark(context) ? const Color(0xFF151D1A) : Colors.white;
+
+Color _appSurfaceSoft(BuildContext context) =>
+    _isDark(context) ? const Color(0xFF1B2521) : const Color(0xFFF0FAF5);
+
+Color _appBorder(BuildContext context) =>
+    _isDark(context) ? const Color(0xFF33413B) : const Color(0xFFD9E5DE);
+
+Color _appText(BuildContext context) =>
+    _isDark(context) ? const Color(0xFFF1F7F4) : const Color(0xFF111827);
+
+Color _appMutedText(BuildContext context) =>
+    _isDark(context) ? const Color(0xFFABBAB3) : const Color(0xFF667085);
+
 String _titleCase(String value) {
   return value
       .trim()
@@ -1276,54 +1297,57 @@ class MealPreviewCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(22),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x180C3B2E),
-            blurRadius: 24,
-            offset: Offset(0, 14),
-          ),
-        ],
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(18),
-        child: Row(
-          children: [
-            const MealBowlGraphic(),
-            const SizedBox(width: 18),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Today Plan',
-                    style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                      color: const Color(0xFF66746D),
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    'Balanced bowl',
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w900,
-                      color: _leafDark,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  const Row(
-                    children: [
-                      MacroChip(color: _leaf, label: '420 kcal'),
-                      SizedBox(width: 8),
-                      MacroChip(color: _coral, label: '28g protein'),
-                    ],
-                  ),
-                ],
-              ),
+    return _HoverLift(
+      borderRadius: 22,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(22),
+          boxShadow: const [
+            BoxShadow(
+              color: Color(0x180C3B2E),
+              blurRadius: 24,
+              offset: Offset(0, 14),
             ),
           ],
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(18),
+          child: Row(
+            children: [
+              const MealBowlGraphic(),
+              const SizedBox(width: 18),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Today Plan',
+                      style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                        color: const Color(0xFF66746D),
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      'Balanced bowl',
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w900,
+                        color: _leafDark,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    const Row(
+                      children: [
+                        MacroChip(color: _leaf, label: '420 kcal'),
+                        SizedBox(width: 8),
+                        MacroChip(color: _coral, label: '28g protein'),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -1576,7 +1600,7 @@ class _MainShellState extends State<MainShell> {
                 ),
               Expanded(
                 child: Container(
-                  color: const Color(0xFFF5F7FA),
+                  color: _appBackground(context),
                   padding: EdgeInsets.all(
                     compact ? 12 : (_selectedIndex == 0 ? 0 : 24),
                   ),
@@ -1728,7 +1752,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 Text(
                   'Dashboard',
                   style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                    color: const Color(0xFF111827),
+                    color: _appText(context),
                     fontWeight: FontWeight.w900,
                   ),
                 ),
@@ -1736,7 +1760,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 Text(
                   "Welcome back! Here's your nutrition overview",
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: const Color(0xFF344054),
+                    color: _appMutedText(context),
                   ),
                 ),
                 const SizedBox(height: 28),
@@ -2117,7 +2141,7 @@ class _FoodDatabaseHeader extends StatelessWidget {
         Text(
           'Food Database',
           style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-            color: const Color(0xFF111827),
+            color: _appText(context),
             fontWeight: FontWeight.w900,
           ),
         ),
@@ -2125,7 +2149,7 @@ class _FoodDatabaseHeader extends StatelessWidget {
         Text(
           'Browse and search nutrition information for foods',
           style: Theme.of(context).textTheme.bodySmall?.copyWith(
-            color: const Color(0xFF667085),
+            color: _appMutedText(context),
             height: 1.25,
           ),
         ),
@@ -2167,8 +2191,9 @@ class _FoodDatabaseHeader extends StatelessWidget {
           ),
           border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
         ),
-        style: const TextStyle(
-          color: Color(0xFF111827),
+        dropdownColor: _appSurface(context),
+        style: TextStyle(
+          color: _appText(context),
           fontSize: 11,
           fontWeight: FontWeight.w800,
         ),
@@ -2405,169 +2430,171 @@ class _FoodDatabaseCard extends StatelessWidget {
     final protein = _foodNumber(food['protein_g']);
     final carbs = _foodNumber(food['carbs_g']);
     final fat = _foodNumber(food['fat_g']);
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: favorite ? const Color(0xFFFFFBFC) : Colors.white,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(
-          color: favorite ? const Color(0xFFFFAFC3) : const Color(0xFFD9E5DE),
-          width: favorite ? 1.4 : 1,
-        ),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x120C3B2E),
-            blurRadius: 16,
-            offset: Offset(0, 8),
+    return _HoverLift(
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: favorite ? const Color(0xFFFFFBFC) : Colors.white,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+            color: favorite ? const Color(0xFFFFAFC3) : const Color(0xFFD9E5DE),
+            width: favorite ? 1.4 : 1,
           ),
-        ],
-      ),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
-        child: Column(
-          children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _FoodCategoryIcon(category: category),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+          boxShadow: const [
+            BoxShadow(
+              color: Color(0x120C3B2E),
+              blurRadius: 16,
+              offset: Offset(0, 8),
+            ),
+          ],
+        ),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
+          child: Column(
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _FoodCategoryIcon(category: category),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          name,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(context).textTheme.titleMedium
+                              ?.copyWith(
+                                color: const Color(0xFF111827),
+                                fontWeight: FontWeight.w900,
+                                height: 1.05,
+                              ),
+                        ),
+                        const SizedBox(height: 3),
+                        Text(
+                          category,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: Color(0xFF667085),
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
                       Text(
-                        name,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.titleMedium
-                            ?.copyWith(
-                              color: const Color(0xFF111827),
-                              fontWeight: FontWeight.w900,
-                              height: 1.05,
-                            ),
-                      ),
-                      const SizedBox(height: 3),
-                      Text(
-                        category,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+                        '${_formatFoodNumber(calories)} kcal',
                         style: const TextStyle(
+                          color: Color(0xFF087443),
+                          fontSize: 14,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      const Text(
+                        'CALORIES',
+                        style: TextStyle(
                           color: Color(0xFF667085),
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
+                          fontSize: 8,
+                          letterSpacing: 0,
+                          fontWeight: FontWeight.w700,
                         ),
                       ),
                     ],
                   ),
-                ),
-                const SizedBox(width: 10),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Text(
-                      '${_formatFoodNumber(calories)} kcal',
+                ],
+              ),
+              const SizedBox(height: 14),
+              Row(
+                children: [
+                  Expanded(
+                    child: _MacroMiniTile(
+                      label: 'Protein',
+                      value: '${_formatFoodNumber(protein)}g',
+                      progress: protein / 40,
+                      color: _leaf,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: _MacroMiniTile(
+                      label: 'Carbs',
+                      value: '${_formatFoodNumber(carbs)}g',
+                      progress: carbs / 70,
+                      color: const Color(0xFF1FBF8F),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: _MacroMiniTile(
+                      label: 'Fat',
+                      value: '${_formatFoodNumber(fat)}g',
+                      progress: fat / 25,
+                      color: const Color(0xFFE11D48),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+              const Divider(height: 1, color: Color(0xFFE4E7EC)),
+              const Spacer(),
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      'Serving size: ${food['serving_size'] ?? '1 serving'}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
-                        color: Color(0xFF087443),
-                        fontSize: 14,
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    const Text(
-                      'CALORIES',
-                      style: TextStyle(
                         color: Color(0xFF667085),
-                        fontSize: 8,
-                        letterSpacing: 0,
-                        fontWeight: FontWeight.w700,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
-                  ],
-                ),
-              ],
-            ),
-            const SizedBox(height: 14),
-            Row(
-              children: [
-                Expanded(
-                  child: _MacroMiniTile(
-                    label: 'Protein',
-                    value: '${_formatFoodNumber(protein)}g',
-                    progress: protein / 40,
-                    color: _leaf,
                   ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: _MacroMiniTile(
-                    label: 'Carbs',
-                    value: '${_formatFoodNumber(carbs)}g',
-                    progress: carbs / 70,
-                    color: const Color(0xFF1FBF8F),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: _MacroMiniTile(
-                    label: 'Fat',
-                    value: '${_formatFoodNumber(fat)}g',
-                    progress: fat / 25,
-                    color: const Color(0xFFE11D48),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 14),
-            const Divider(height: 1, color: Color(0xFFE4E7EC)),
-            const Spacer(),
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    'Serving size: ${food['serving_size'] ?? '1 serving'}',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: Color(0xFF667085),
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600,
+                  IconButton(
+                    tooltip: 'Find substitutes',
+                    visualDensity: VisualDensity.compact,
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints.tightFor(
+                      width: 28,
+                      height: 28,
+                    ),
+                    onPressed: onSubstitutes,
+                    icon: const Icon(
+                      Icons.swap_horiz,
+                      color: Color(0xFF62716A),
+                      size: 20,
                     ),
                   ),
-                ),
-                IconButton(
-                  tooltip: 'Find substitutes',
-                  visualDensity: VisualDensity.compact,
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints.tightFor(
-                    width: 28,
-                    height: 28,
+                  IconButton(
+                    tooltip: favorite ? 'Remove favorite' : 'Add favorite',
+                    visualDensity: VisualDensity.compact,
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints.tightFor(
+                      width: 28,
+                      height: 28,
+                    ),
+                    onPressed: onFavorite,
+                    icon: Icon(
+                      favorite ? Icons.favorite : Icons.favorite_border,
+                      color: favorite
+                          ? const Color(0xFFE11D48)
+                          : const Color(0xFF62716A),
+                      size: 20,
+                    ),
                   ),
-                  onPressed: onSubstitutes,
-                  icon: const Icon(
-                    Icons.swap_horiz,
-                    color: Color(0xFF62716A),
-                    size: 20,
-                  ),
-                ),
-                IconButton(
-                  tooltip: favorite ? 'Remove favorite' : 'Add favorite',
-                  visualDensity: VisualDensity.compact,
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints.tightFor(
-                    width: 28,
-                    height: 28,
-                  ),
-                  onPressed: onFavorite,
-                  icon: Icon(
-                    favorite ? Icons.favorite : Icons.favorite_border,
-                    color: favorite
-                        ? const Color(0xFFE11D48)
-                        : const Color(0xFF62716A),
-                    size: 20,
-                  ),
-                ),
-              ],
-            ),
-          ],
+                ],
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -2897,7 +2924,7 @@ class _AddFoodDialogState extends State<_AddFoodDialog> {
         child: ClipRRect(
           borderRadius: BorderRadius.circular(8),
           child: ColoredBox(
-            color: Colors.white,
+            color: _appSurface(context),
             child: Form(
               key: _formKey,
               child: Column(
@@ -2907,7 +2934,7 @@ class _AddFoodDialogState extends State<_AddFoodDialog> {
                     saving: _saving,
                     onClose: () => Navigator.of(context).pop(false),
                   ),
-                  const Divider(height: 1, color: Color(0xFFE4E7EC)),
+                  Divider(height: 1, color: _appBorder(context)),
                   Flexible(
                     child: SingleChildScrollView(
                       padding: const EdgeInsets.fromLTRB(26, 22, 26, 26),
@@ -2953,7 +2980,7 @@ class _AddFoodDialogState extends State<_AddFoodDialog> {
                       ),
                     ),
                   ),
-                  const Divider(height: 1, color: Color(0xFFE4E7EC)),
+                  Divider(height: 1, color: _appBorder(context)),
                   Padding(
                     padding: const EdgeInsets.fromLTRB(26, 18, 26, 18),
                     child: Row(
@@ -3036,17 +3063,17 @@ class _AddFoodDialogHeader extends StatelessWidget {
                 Text(
                   'Add New Food',
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    color: const Color(0xFF111827),
+                    color: _appText(context),
                     fontWeight: FontWeight.w900,
                   ),
                 ),
                 const SizedBox(height: 2),
-                const Text(
+                Text(
                   'Enter nutritional details to expand the database',
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
-                    color: Color(0xFF344054),
+                    color: _appMutedText(context),
                     fontSize: 11,
                     fontWeight: FontWeight.w500,
                   ),
@@ -3180,7 +3207,7 @@ class _FoodDialogTextField extends StatelessWidget {
             controller: controller,
             keyboardType: keyboardType,
             validator: validator,
-            style: const TextStyle(fontSize: 13, color: Color(0xFF111827)),
+            style: TextStyle(fontSize: 13, color: _appText(context)),
             decoration: InputDecoration(
               hintText: hintText,
               suffixText: suffixText,
@@ -3195,18 +3222,18 @@ class _FoodDialogTextField extends StatelessWidget {
                 fontWeight: FontWeight.w500,
               ),
               filled: true,
-              fillColor: const Color(0xFFFAFAFF),
+              fillColor: _appSurfaceSoft(context),
               contentPadding: const EdgeInsets.symmetric(
                 horizontal: 14,
                 vertical: 12,
               ),
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(6),
-                borderSide: const BorderSide(color: Color(0xFFD0D5DD)),
+                borderSide: BorderSide(color: _appBorder(context)),
               ),
               enabledBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(6),
-                borderSide: const BorderSide(color: Color(0xFFD0D5DD)),
+                borderSide: BorderSide(color: _appBorder(context)),
               ),
             ),
           ),
@@ -3245,27 +3272,29 @@ class _FoodDialogCategoryField extends StatelessWidget {
         SizedBox(
           height: 46,
           child: DropdownButtonFormField<String>(
+            key: const ValueKey('add-food-category'),
             initialValue: value,
             isExpanded: true,
+            dropdownColor: _appSurface(context),
             icon: const Icon(Icons.keyboard_arrow_down_rounded, size: 18),
             decoration: InputDecoration(
               filled: true,
-              fillColor: const Color(0xFFFAFAFF),
+              fillColor: _appSurfaceSoft(context),
               contentPadding: const EdgeInsets.symmetric(
                 horizontal: 14,
                 vertical: 12,
               ),
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(6),
-                borderSide: const BorderSide(color: Color(0xFFD0D5DD)),
+                borderSide: BorderSide(color: _appBorder(context)),
               ),
               enabledBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(6),
-                borderSide: const BorderSide(color: Color(0xFFD0D5DD)),
+                borderSide: BorderSide(color: _appBorder(context)),
               ),
             ),
-            style: const TextStyle(
-              color: Color(0xFF111827),
+            style: TextStyle(
+              color: _appText(context),
               fontSize: 13,
               fontWeight: FontWeight.w600,
             ),
@@ -3273,7 +3302,10 @@ class _FoodDialogCategoryField extends StatelessWidget {
                 .map(
                   (category) => DropdownMenuItem<String>(
                     value: category,
-                    child: Text(_titleCase(category)),
+                    child: Text(
+                      _titleCase(category),
+                      style: TextStyle(color: _appText(context)),
+                    ),
                   ),
                 )
                 .toList(),
@@ -3302,7 +3334,7 @@ class _MacroBreakdownPanel extends StatelessWidget {
   Widget build(BuildContext context) {
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: const Color(0xFFF3F5FF),
+        color: _appSurfaceSoft(context),
         borderRadius: BorderRadius.circular(6),
         border: Border.all(color: const Color(0xFFD0D5DD)),
       ),
@@ -3311,18 +3343,18 @@ class _MacroBreakdownPanel extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Row(
+            Row(
               children: [
                 Icon(
                   Icons.analytics_outlined,
                   size: 13,
-                  color: Color(0xFF111827),
+                  color: _appText(context),
                 ),
-                SizedBox(width: 5),
+                const SizedBox(width: 5),
                 Text(
                   'Macro Breakdown',
                   style: TextStyle(
-                    color: Color(0xFF111827),
+                    color: _appText(context),
                     fontSize: 11,
                     fontWeight: FontWeight.w900,
                   ),
@@ -3410,8 +3442,8 @@ class _MacroDialogInput extends StatelessWidget {
             validator: validator,
             textAlign: TextAlign.center,
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            style: const TextStyle(
-              color: Color(0xFF475467),
+            style: TextStyle(
+              color: _appText(context),
               fontSize: 13,
               fontWeight: FontWeight.w700,
             ),
@@ -3423,7 +3455,7 @@ class _MacroDialogInput extends StatelessWidget {
                 fontSize: 9,
               ),
               filled: true,
-              fillColor: Colors.white,
+              fillColor: _appSurface(context),
               contentPadding: const EdgeInsets.symmetric(
                 horizontal: 9,
                 vertical: 8,
@@ -3459,23 +3491,23 @@ class _UploadFoodImageBox extends StatelessWidget {
         height: 132,
         width: double.infinity,
         decoration: BoxDecoration(
-          color: const Color(0xFFF4F5F7),
-          borderRadius: BorderRadius.circular(6),
-          border: Border.all(color: const Color(0xFFD0D5DD)),
-          image: const DecorationImage(
-            image: NetworkImage(
-              'https://images.unsplash.com/photo-1540420773420-3366772f4999',
-            ),
-            fit: BoxFit.cover,
-            opacity: 0.16,
+          gradient: LinearGradient(
+            colors: [
+              _appSurfaceSoft(context),
+              _leaf.withValues(alpha: _isDark(context) ? 0.16 : 0.08),
+            ],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
           ),
+          borderRadius: BorderRadius.circular(6),
+          border: Border.all(color: _appBorder(context)),
         ),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(
+            Icon(
               Icons.add_a_photo_outlined,
-              color: Color(0xFF344054),
+              color: _appText(context),
               size: 28,
             ),
             const SizedBox(height: 8),
@@ -3483,8 +3515,8 @@ class _UploadFoodImageBox extends StatelessWidget {
               imageName ?? 'Upload Food Image (Optional)',
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                color: Color(0xFF344054),
+              style: TextStyle(
+                color: _appText(context),
                 fontSize: 13,
                 fontWeight: FontWeight.w600,
               ),
@@ -3550,8 +3582,8 @@ class _FoodDialogLabel extends StatelessWidget {
   Widget build(BuildContext context) {
     return Text(
       text,
-      style: const TextStyle(
-        color: Color(0xFF111827),
+      style: TextStyle(
+        color: _appText(context),
         fontSize: 11,
         fontWeight: FontWeight.w700,
       ),
@@ -3790,7 +3822,7 @@ class DashboardMetricCard extends StatelessWidget {
                 Text(
                   'Today',
                   style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                    color: const Color(0xFF667085),
+                    color: _appMutedText(context),
                   ),
                 ),
               ],
@@ -3799,7 +3831,7 @@ class DashboardMetricCard extends StatelessWidget {
             Text(
               value,
               style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                color: const Color(0xFF111827),
+                color: _appText(context),
                 fontWeight: FontWeight.w900,
               ),
             ),
@@ -3808,7 +3840,7 @@ class DashboardMetricCard extends StatelessWidget {
               label,
               style: Theme.of(
                 context,
-              ).textTheme.labelSmall?.copyWith(color: const Color(0xFF667085)),
+              ).textTheme.labelSmall?.copyWith(color: _appMutedText(context)),
             ),
             const SizedBox(height: 8),
             ClipRRect(
@@ -3868,7 +3900,7 @@ class DashboardWeightCard extends StatelessWidget {
             Text(
               value,
               style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                color: const Color(0xFF111827),
+                color: _appText(context),
                 fontWeight: FontWeight.w900,
               ),
             ),
@@ -3877,13 +3909,13 @@ class DashboardWeightCard extends StatelessWidget {
               'Current Weight',
               style: Theme.of(
                 context,
-              ).textTheme.labelSmall?.copyWith(color: const Color(0xFF667085)),
+              ).textTheme.labelSmall?.copyWith(color: _appMutedText(context)),
             ),
             Text(
               target,
               style: Theme.of(
                 context,
-              ).textTheme.labelSmall?.copyWith(color: const Color(0xFF98A2B3)),
+              ).textTheme.labelSmall?.copyWith(color: _appMutedText(context)),
             ),
           ],
         ),
@@ -3909,7 +3941,7 @@ class DashboardPanel extends StatelessWidget {
             Text(
               title,
               style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                color: const Color(0xFF111827),
+                color: _appText(context),
                 fontWeight: FontWeight.w900,
               ),
             ),
@@ -3929,20 +3961,22 @@ class _DashboardCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        border: Border.all(color: const Color(0xFFE4E7EC)),
-        borderRadius: BorderRadius.circular(8),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x12000000),
-            blurRadius: 8,
-            offset: Offset(0, 3),
-          ),
-        ],
+    return _HoverLift(
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: _appSurface(context),
+          border: Border.all(color: _appBorder(context)),
+          borderRadius: BorderRadius.circular(8),
+          boxShadow: const [
+            BoxShadow(
+              color: Color(0x12000000),
+              blurRadius: 8,
+              offset: Offset(0, 3),
+            ),
+          ],
+        ),
+        child: child,
       ),
-      child: child,
     );
   }
 }
@@ -4506,7 +4540,7 @@ class MacroLegendRow extends StatelessWidget {
             child: Text(
               label,
               style: TextStyle(
-                color: const Color(0xFF344054),
+                color: _appMutedText(context),
                 fontSize: 12,
                 fontWeight: highlighted ? FontWeight.w900 : FontWeight.w600,
               ),
@@ -4514,8 +4548,8 @@ class MacroLegendRow extends StatelessWidget {
           ),
           Text(
             value,
-            style: const TextStyle(
-              color: Color(0xFF111827),
+            style: TextStyle(
+              color: _appText(context),
               fontSize: 12,
               fontWeight: FontWeight.w900,
             ),
@@ -4576,31 +4610,38 @@ class QuickActionsGrid extends StatelessWidget {
                 (action) => SizedBox(
                   width: width,
                   height: 100,
-                  child: InkWell(
-                    onTap: () => onNavigate(action.destination),
-                    borderRadius: BorderRadius.circular(8),
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(
-                        color: action.background,
-                        border: Border.all(
+                  child: Semantics(
+                    key: ValueKey('quick-action-${action.destination}'),
+                    button: true,
+                    label: 'Open ${action.label}',
+                    child: Material(
+                      color: action.background,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        side: BorderSide(
                           color: action.color.withValues(alpha: 0.22),
                         ),
-                        borderRadius: BorderRadius.circular(8),
                       ),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(action.icon, color: action.color, size: 21),
-                          const SizedBox(height: 10),
-                          Text(
-                            action.label,
-                            style: const TextStyle(
-                              color: Color(0xFF111827),
-                              fontWeight: FontWeight.w900,
-                              fontSize: 12,
+                      clipBehavior: Clip.antiAlias,
+                      child: InkWell(
+                        onTap: () => onNavigate(action.destination),
+                        mouseCursor: SystemMouseCursors.click,
+                        hoverColor: action.color.withValues(alpha: 0.12),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(action.icon, color: action.color, size: 21),
+                            const SizedBox(height: 10),
+                            Text(
+                              action.label,
+                              style: const TextStyle(
+                                color: Color(0xFF17231F),
+                                fontWeight: FontWeight.w900,
+                                fontSize: 12,
+                              ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
                     ),
                   ),
@@ -4992,7 +5033,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             Text(
               'Health Profile',
               style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                color: const Color(0xFF111827),
+                color: _appText(context),
                 fontWeight: FontWeight.w900,
               ),
             ),
@@ -5001,7 +5042,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               'Manage your body information and health goals',
               style: Theme.of(
                 context,
-              ).textTheme.bodyMedium?.copyWith(color: const Color(0xFF667085)),
+              ).textTheme.bodyMedium?.copyWith(color: _appMutedText(context)),
             ),
             const SizedBox(height: 28),
             LayoutBuilder(
@@ -5366,7 +5407,7 @@ class ProfileSectionTitle extends StatelessWidget {
         Text(
           title,
           style: Theme.of(context).textTheme.titleMedium?.copyWith(
-            color: const Color(0xFF1F2937),
+            color: _appText(context),
             fontWeight: FontWeight.w900,
           ),
         ),
@@ -5406,8 +5447,8 @@ class ProfileTextField extends StatelessWidget {
           minLines: minLines,
           maxLines: minLines == 1 ? 1 : minLines,
           onChanged: (_) => onChanged?.call(),
-          style: const TextStyle(color: Color(0xFF1F2937), fontSize: 14),
-          decoration: _profileInputDecoration(hint),
+          style: TextStyle(color: _appText(context), fontSize: 14),
+          decoration: _profileInputDecoration(context, hint),
         ),
       ],
     );
@@ -5441,7 +5482,9 @@ class ProfileSelectField extends StatelessWidget {
         DropdownButtonFormField<String>(
           initialValue: value,
           isExpanded: true,
-          decoration: _profileInputDecoration(null),
+          decoration: _profileInputDecoration(context, null),
+          dropdownColor: _appSurface(context),
+          style: TextStyle(color: _appText(context), fontSize: 14),
           icon: const Icon(
             Icons.keyboard_arrow_down,
             color: Color(0xFF98A2B3),
@@ -5487,8 +5530,8 @@ class ProfileFieldLabel extends StatelessWidget {
   Widget build(BuildContext context) {
     return Text(
       label,
-      style: const TextStyle(
-        color: Color(0xFF344054),
+      style: TextStyle(
+        color: _appMutedText(context),
         fontSize: 12,
         fontWeight: FontWeight.w800,
       ),
@@ -5496,20 +5539,20 @@ class ProfileFieldLabel extends StatelessWidget {
   }
 }
 
-InputDecoration _profileInputDecoration(String? hint) {
+InputDecoration _profileInputDecoration(BuildContext context, String? hint) {
   return InputDecoration(
     hintText: hint,
-    hintStyle: const TextStyle(color: Color(0xFF98A2B3), fontSize: 14),
+    hintStyle: TextStyle(color: _appMutedText(context), fontSize: 14),
     filled: true,
-    fillColor: const Color(0xFFF7FAFC),
+    fillColor: _appSurfaceSoft(context),
     contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
     border: OutlineInputBorder(
       borderRadius: BorderRadius.circular(8),
-      borderSide: const BorderSide(color: Color(0xFFDDE5EE)),
+      borderSide: BorderSide(color: _appBorder(context)),
     ),
     enabledBorder: OutlineInputBorder(
       borderRadius: BorderRadius.circular(8),
-      borderSide: const BorderSide(color: Color(0xFFDDE5EE)),
+      borderSide: BorderSide(color: _appBorder(context)),
     ),
     focusedBorder: OutlineInputBorder(
       borderRadius: BorderRadius.circular(8),
@@ -5570,7 +5613,7 @@ class ProfileSavedDialog extends StatelessWidget {
           constraints: const BoxConstraints(maxWidth: 260),
           child: DecoratedBox(
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: _appSurface(context),
               borderRadius: BorderRadius.circular(18),
               boxShadow: const [
                 BoxShadow(
@@ -5600,19 +5643,22 @@ class ProfileSavedDialog extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 18),
-                  const Text(
+                  Text(
                     'Success!',
                     style: TextStyle(
-                      color: Color(0xFF111827),
+                      color: _appText(context),
                       fontSize: 22,
                       fontWeight: FontWeight.w900,
                     ),
                   ),
                   const SizedBox(height: 8),
-                  const Text(
+                  Text(
                     'Profile saved successfully',
                     textAlign: TextAlign.center,
-                    style: TextStyle(color: Color(0xFF667085), fontSize: 12),
+                    style: TextStyle(
+                      color: _appMutedText(context),
+                      fontSize: 12,
+                    ),
                   ),
                   const SizedBox(height: 22),
                   FilledButton(
@@ -5656,10 +5702,10 @@ class BmiInsightCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
+            Text(
               'Body Mass Index (BMI)',
               style: TextStyle(
-                color: Color(0xFF1F2937),
+                color: _appText(context),
                 fontWeight: FontWeight.w900,
               ),
             ),
@@ -5742,7 +5788,7 @@ class BmiRangeRow extends StatelessWidget {
                 style: TextStyle(
                   color: highlighted
                       ? const Color(0xFF16A05D)
-                      : const Color(0xFF98A2B3),
+                      : _appMutedText(context),
                   fontSize: 12,
                   fontWeight: highlighted ? FontWeight.w900 : FontWeight.w600,
                 ),
@@ -5753,7 +5799,7 @@ class BmiRangeRow extends StatelessWidget {
               style: TextStyle(
                 color: highlighted
                     ? const Color(0xFF16A05D)
-                    : const Color(0xFF667085),
+                    : _appMutedText(context),
                 fontSize: 12,
                 fontWeight: FontWeight.w800,
               ),
@@ -5792,8 +5838,8 @@ class ProfileNumberCard extends StatelessWidget {
               alignment: Alignment.centerLeft,
               child: Text(
                 title,
-                style: const TextStyle(
-                  color: Color(0xFF1F2937),
+                style: TextStyle(
+                  color: _appText(context),
                   fontWeight: FontWeight.w900,
                 ),
               ),
@@ -5811,14 +5857,14 @@ class ProfileNumberCard extends StatelessWidget {
             const SizedBox(height: 8),
             Text(
               unit,
-              style: const TextStyle(color: Color(0xFF98A2B3), fontSize: 13),
+              style: TextStyle(color: _appMutedText(context), fontSize: 13),
             ),
             const SizedBox(height: 26),
             Text(
               note,
               textAlign: TextAlign.center,
-              style: const TextStyle(
-                color: Color(0xFF98A2B3),
+              style: TextStyle(
+                color: _appMutedText(context),
                 fontSize: 11,
                 height: 1.35,
               ),
@@ -6465,15 +6511,15 @@ class _MealPlannerHeader extends StatelessWidget {
             Text(
               'Meal Planner',
               style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                color: const Color(0xFF111827),
+                color: _appText(context),
                 fontWeight: FontWeight.w900,
               ),
             ),
             const SizedBox(height: 3),
-            const Text(
+            Text(
               'Generate and manage your meal plans',
               style: TextStyle(
-                color: Color(0xFF667085),
+                color: _appMutedText(context),
                 fontSize: 13,
                 fontWeight: FontWeight.w500,
               ),
@@ -6492,7 +6538,7 @@ class _MealPlannerHeader extends StatelessWidget {
                 icon: const Icon(Icons.shopping_cart_outlined, size: 15),
                 label: const Text('Export to Grocery'),
                 style: OutlinedButton.styleFrom(
-                  foregroundColor: const Color(0xFF111827),
+                  foregroundColor: _appText(context),
                   side: const BorderSide(color: Color(0xFFD0D5DD)),
                   textStyle: const TextStyle(
                     fontSize: 11,
@@ -6560,7 +6606,7 @@ class _MealPlannerControls extends StatelessWidget {
   Widget build(BuildContext context) {
     final tabs = DecoratedBox(
       decoration: BoxDecoration(
-        color: const Color(0xFFF2F4F7),
+        color: _appSurfaceSoft(context),
         borderRadius: BorderRadius.circular(8),
       ),
       child: Padding(
@@ -6587,9 +6633,9 @@ class _MealPlannerControls extends StatelessWidget {
       width: compact ? double.infinity : 286,
       child: DecoratedBox(
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: _appSurface(context),
           borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: const Color(0xFFD0D5DD)),
+          border: Border.all(color: _appBorder(context)),
         ),
         child: Row(
           children: [
@@ -6614,15 +6660,15 @@ class _MealPlannerControls extends StatelessWidget {
                 label: Text(
                   dateLabel,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: Color(0xFF111827),
+                  style: TextStyle(
+                    color: _appText(context),
                     fontSize: 12,
                     fontWeight: FontWeight.w900,
                   ),
                 ),
                 style: TextButton.styleFrom(
                   padding: const EdgeInsets.symmetric(horizontal: 6),
-                  foregroundColor: const Color(0xFF111827),
+                  foregroundColor: _appText(context),
                 ),
               ),
             ),
@@ -6668,7 +6714,7 @@ class _PlannerTab extends StatelessWidget {
       borderRadius: BorderRadius.circular(6),
       child: DecoratedBox(
         decoration: BoxDecoration(
-          color: selected ? Colors.white : Colors.transparent,
+          color: selected ? _appSurface(context) : Colors.transparent,
           borderRadius: BorderRadius.circular(6),
         ),
         child: Padding(
@@ -6676,9 +6722,7 @@ class _PlannerTab extends StatelessWidget {
           child: Text(
             label,
             style: TextStyle(
-              color: selected
-                  ? const Color(0xFF111827)
-                  : const Color(0xFF667085),
+              color: selected ? _appText(context) : _appMutedText(context),
               fontSize: 11,
               fontWeight: FontWeight.w900,
             ),
@@ -6735,8 +6779,8 @@ class _MealPlannerCard extends StatelessWidget {
                 Expanded(
                   child: Text(
                     '${meal.icon} ${meal.name}',
-                    style: const TextStyle(
-                      color: Color(0xFF111827),
+                    style: TextStyle(
+                      color: _appText(context),
                       fontSize: 15,
                       fontWeight: FontWeight.w900,
                     ),
@@ -6859,8 +6903,8 @@ class _PlannerMacroStat extends StatelessWidget {
       children: [
         Text(
           label,
-          style: const TextStyle(
-            color: Color(0xFF667085),
+          style: TextStyle(
+            color: _appMutedText(context),
             fontSize: 8,
             fontWeight: FontWeight.w900,
           ),
@@ -6868,8 +6912,8 @@ class _PlannerMacroStat extends StatelessWidget {
         const SizedBox(height: 7),
         Text(
           value,
-          style: const TextStyle(
-            color: Color(0xFF111827),
+          style: TextStyle(
+            color: _appText(context),
             fontSize: 12,
             fontWeight: FontWeight.w900,
           ),
@@ -6997,8 +7041,8 @@ class _WeeklyPlannerDayCard extends StatelessWidget {
                 Expanded(
                   child: Text(
                     day.name,
-                    style: const TextStyle(
-                      color: Color(0xFF111827),
+                    style: TextStyle(
+                      color: _appText(context),
                       fontSize: 13,
                       fontWeight: FontWeight.w900,
                     ),
@@ -7028,8 +7072,8 @@ class _WeeklyPlannerDayCard extends StatelessWidget {
                         '${meal.name}: ${_weeklyMealPreview(meal)}',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: Color(0xFF344054),
+                        style: TextStyle(
+                          color: _appMutedText(context),
                           fontSize: 10,
                           height: 1.25,
                           fontWeight: FontWeight.w700,
@@ -7066,10 +7110,10 @@ class _WeeklyOverviewCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
+            Text(
               'Weekly Overview',
               style: TextStyle(
-                color: Color(0xFF111827),
+                color: _appText(context),
                 fontSize: 15,
                 fontWeight: FontWeight.w900,
               ),
@@ -7176,10 +7220,10 @@ class _DailyTotalNutritionCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
+            Text(
               'Daily Total Nutrition',
               style: TextStyle(
-                color: Color(0xFF111827),
+                color: _appText(context),
                 fontSize: 15,
                 fontWeight: FontWeight.w900,
               ),
@@ -7275,8 +7319,8 @@ class _DailyNutritionReachCard extends StatelessWidget {
               const Spacer(),
               Text(
                 value,
-                style: const TextStyle(
-                  color: Color(0xFF111827),
+                style: TextStyle(
+                  color: _appText(context),
                   fontSize: 19,
                   fontWeight: FontWeight.w900,
                 ),
@@ -7864,15 +7908,15 @@ class _FoodLoggingHeader extends StatelessWidget {
         Text(
           'Food Logging',
           style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-            color: const Color(0xFF111827),
+            color: _appText(context),
             fontWeight: FontWeight.w900,
           ),
         ),
         const SizedBox(height: 3),
-        const Text(
+        Text(
           'Track your daily meals and nutrition',
           style: TextStyle(
-            color: Color(0xFF667085),
+            color: _appMutedText(context),
             fontSize: 13,
             fontWeight: FontWeight.w500,
           ),
@@ -7962,10 +8006,10 @@ class _LogFoodFormCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
+            Text(
               'Log Food',
               style: TextStyle(
-                color: Color(0xFF111827),
+                color: _appText(context),
                 fontSize: 16,
                 fontWeight: FontWeight.w900,
               ),
@@ -8070,21 +8114,21 @@ class _TodaysFoodLogCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
+            Text(
               "Today's Food Log",
               style: TextStyle(
-                color: Color(0xFF111827),
+                color: _appText(context),
                 fontSize: 16,
                 fontWeight: FontWeight.w900,
               ),
             ),
             const SizedBox(height: 22),
             if (visibleLogs.isEmpty)
-              const Padding(
-                padding: EdgeInsets.symmetric(vertical: 18),
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 18),
                 child: Text(
                   'No food logs yet',
-                  style: TextStyle(color: Color(0xFF667085)),
+                  style: TextStyle(color: _appMutedText(context)),
                 ),
               )
             else
@@ -8132,8 +8176,8 @@ class _FoodLogMealLabel extends StatelessWidget {
         const SizedBox(width: 6),
         Text(
           meal.toUpperCase(),
-          style: const TextStyle(
-            color: Color(0xFF344054),
+          style: TextStyle(
+            color: _appMutedText(context),
             fontSize: 11,
             fontWeight: FontWeight.w900,
             letterSpacing: 0,
@@ -8291,10 +8335,10 @@ class _TodaysNutritionCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
+            Text(
               "Today's Nutrition",
               style: TextStyle(
-                color: Color(0xFF111827),
+                color: _appText(context),
                 fontSize: 15,
                 fontWeight: FontWeight.w900,
               ),
@@ -8361,8 +8405,8 @@ class _NutritionProgressRow extends StatelessWidget {
               Expanded(
                 child: Text(
                   label,
-                  style: const TextStyle(
-                    color: Color(0xFF111827),
+                  style: TextStyle(
+                    color: _appText(context),
                     fontSize: 11,
                     fontWeight: FontWeight.w700,
                   ),
@@ -8370,8 +8414,8 @@ class _NutritionProgressRow extends StatelessWidget {
               ),
               Text(
                 '${_formatFoodNumber(value)}$unit / ${_formatFoodNumber(target)}$unit',
-                style: const TextStyle(
-                  color: Color(0xFF111827),
+                style: TextStyle(
+                  color: _appText(context),
                   fontSize: 11,
                   fontWeight: FontWeight.w900,
                 ),
@@ -8542,9 +8586,9 @@ class _FoodLogDropdown<T> extends StatelessWidget {
             isExpanded: true,
             hint: hint == null ? null : Text(hint!),
             icon: const Icon(Icons.keyboard_arrow_down_rounded, size: 18),
-            decoration: _foodLogInputDecoration(),
-            style: const TextStyle(
-              color: Color(0xFF111827),
+            decoration: _foodLogInputDecoration(context),
+            style: TextStyle(
+              color: _appText(context),
               fontSize: 12,
               fontWeight: FontWeight.w600,
             ),
@@ -8597,12 +8641,12 @@ class _FoodLogTextField extends StatelessWidget {
           keyboardType: keyboardType,
           minLines: minLines,
           maxLines: maxLines,
-          style: const TextStyle(
-            color: Color(0xFF111827),
+          style: TextStyle(
+            color: _appText(context),
             fontSize: 12,
             fontWeight: FontWeight.w600,
           ),
-          decoration: _foodLogInputDecoration(hintText: hintText),
+          decoration: _foodLogInputDecoration(context, hintText: hintText),
         ),
       ],
     );
@@ -8618,8 +8662,8 @@ class _FoodLogFieldLabel extends StatelessWidget {
   Widget build(BuildContext context) {
     return Text(
       text,
-      style: const TextStyle(
-        color: Color(0xFF111827),
+      style: TextStyle(
+        color: _appText(context),
         fontSize: 11,
         fontWeight: FontWeight.w800,
       ),
@@ -8634,13 +8678,15 @@ class _FoodLogPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: const Color(0xFFD9E5DE)),
+    return _HoverLift(
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: _appSurface(context),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: _appBorder(context)),
+        ),
+        child: child,
       ),
-      child: child,
     );
   }
 }
@@ -8665,24 +8711,27 @@ class _FoodLogReceiptIcon extends StatelessWidget {
   }
 }
 
-InputDecoration _foodLogInputDecoration({String? hintText}) {
+InputDecoration _foodLogInputDecoration(
+  BuildContext context, {
+  String? hintText,
+}) {
   return InputDecoration(
     hintText: hintText,
-    hintStyle: const TextStyle(
-      color: Color(0xFF98A2B3),
+    hintStyle: TextStyle(
+      color: _appMutedText(context),
       fontSize: 11,
       fontWeight: FontWeight.w500,
     ),
     filled: true,
-    fillColor: Colors.white,
+    fillColor: _appSurfaceSoft(context),
     contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
     border: OutlineInputBorder(
       borderRadius: BorderRadius.circular(7),
-      borderSide: const BorderSide(color: Color(0xFFCFE0D6)),
+      borderSide: BorderSide(color: _appBorder(context)),
     ),
     enabledBorder: OutlineInputBorder(
       borderRadius: BorderRadius.circular(7),
-      borderSide: const BorderSide(color: Color(0xFFCFE0D6)),
+      borderSide: BorderSide(color: _appBorder(context)),
     ),
     focusedBorder: OutlineInputBorder(
       borderRadius: BorderRadius.circular(7),
@@ -9096,8 +9145,8 @@ class _GroceryScreenState extends State<GroceryScreen> {
                         Expanded(
                           child: Text(
                             selected?['name']?.toString() ?? 'Shopping List',
-                            style: const TextStyle(
-                              color: Color(0xFF111827),
+                            style: TextStyle(
+                              color: _appText(context),
                               fontSize: 16,
                               fontWeight: FontWeight.w900,
                             ),
@@ -9106,8 +9155,8 @@ class _GroceryScreenState extends State<GroceryScreen> {
                         if (selected?['created_at'] != null)
                           Text(
                             _formatLogTime(selected?['created_at']),
-                            style: const TextStyle(
-                              color: Color(0xFF667085),
+                            style: TextStyle(
+                              color: _appMutedText(context),
                               fontSize: 11,
                               fontWeight: FontWeight.w700,
                             ),
@@ -9119,8 +9168,8 @@ class _GroceryScreenState extends State<GroceryScreen> {
                       items.isEmpty
                           ? 'Ingredients will appear here after generating a list from meal plans.'
                           : 'Ingredients generated from meal plans with quantity, estimated cost, and kitchen status.',
-                      style: const TextStyle(
-                        color: Color(0xFF667085),
+                      style: TextStyle(
+                        color: _appMutedText(context),
                         fontSize: 12,
                         fontWeight: FontWeight.w600,
                       ),
@@ -9510,10 +9559,10 @@ class _AllergiesScreenState extends State<AllergiesScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    const Text(
+                    Text(
                       'Add Allergy',
                       style: TextStyle(
-                        color: Color(0xFF111827),
+                        color: _appText(context),
                         fontSize: 16,
                         fontWeight: FontWeight.w900,
                       ),
@@ -9552,10 +9601,10 @@ class _AllergiesScreenState extends State<AllergiesScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
+                    Text(
                       'Tracked Allergies',
                       style: TextStyle(
-                        color: Color(0xFF111827),
+                        color: _appText(context),
                         fontSize: 16,
                         fontWeight: FontWeight.w900,
                       ),
@@ -9971,22 +10020,18 @@ class _SettingsHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Column(
+    return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
+        const Text(
           'Settings',
-          style: TextStyle(
-            color: Colors.black,
-            fontSize: 26,
-            fontWeight: FontWeight.w900,
-          ),
+          style: TextStyle(fontSize: 26, fontWeight: FontWeight.w900),
         ),
-        SizedBox(height: 8),
+        const SizedBox(height: 8),
         Text(
           'Manage your account and preferences',
           style: TextStyle(
-            color: Color(0xFF2F3A45),
+            color: _appMutedText(context),
             fontSize: 14,
             fontWeight: FontWeight.w500,
           ),
@@ -10027,8 +10072,8 @@ class _SettingsPanel extends StatelessWidget {
                   ],
                   Text(
                     title,
-                    style: const TextStyle(
-                      color: Colors.black,
+                    style: TextStyle(
+                      color: _appText(context),
                       fontSize: 14,
                       fontWeight: FontWeight.w900,
                     ),
@@ -10055,28 +10100,28 @@ class _SettingsTextField extends StatelessWidget {
   Widget build(BuildContext context) {
     return TextFormField(
       controller: controller,
-      style: const TextStyle(color: Color(0xFF111827), fontSize: 12),
+      style: TextStyle(color: _appText(context), fontSize: 12),
       decoration: InputDecoration(
         labelText: label,
         floatingLabelBehavior: FloatingLabelBehavior.always,
-        labelStyle: const TextStyle(
-          color: Color(0xFF9AA3AD),
+        labelStyle: TextStyle(
+          color: _appMutedText(context),
           fontSize: 11,
           fontWeight: FontWeight.w600,
         ),
         filled: true,
-        fillColor: const Color(0xFFFCFDFC),
+        fillColor: _appSurfaceSoft(context),
         contentPadding: const EdgeInsets.symmetric(
           horizontal: 12,
           vertical: 11,
         ),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(2),
-          borderSide: const BorderSide(color: Color(0xFF8B949E)),
+          borderSide: BorderSide(color: _appBorder(context)),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(2),
-          borderSide: const BorderSide(color: Color(0xFF8B949E)),
+          borderSide: BorderSide(color: _appBorder(context)),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(2),
@@ -10108,7 +10153,7 @@ class _SettingsToggleRow extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: 12),
       child: DecoratedBox(
         decoration: BoxDecoration(
-          color: const Color(0xFFF0FAF5),
+          color: _appSurfaceSoft(context),
           borderRadius: BorderRadius.circular(7),
         ),
         child: Padding(
@@ -10125,8 +10170,8 @@ class _SettingsToggleRow extends StatelessWidget {
                   children: [
                     Text(
                       title,
-                      style: const TextStyle(
-                        color: Colors.black,
+                      style: TextStyle(
+                        color: _appText(context),
                         fontSize: 11,
                         fontWeight: FontWeight.w900,
                       ),
@@ -10134,8 +10179,8 @@ class _SettingsToggleRow extends StatelessWidget {
                     const SizedBox(height: 2),
                     Text(
                       subtitle,
-                      style: const TextStyle(
-                        color: Colors.black,
+                      style: TextStyle(
+                        color: _appMutedText(context),
                         fontSize: 10,
                         fontWeight: FontWeight.w500,
                       ),
@@ -10181,7 +10226,7 @@ class _SettingsActionRow extends StatelessWidget {
       borderRadius: BorderRadius.circular(7),
       child: DecoratedBox(
         decoration: BoxDecoration(
-          color: const Color(0xFFF0FAF5),
+          color: _appSurfaceSoft(context),
           borderRadius: BorderRadius.circular(7),
         ),
         child: Padding(
@@ -10194,8 +10239,8 @@ class _SettingsActionRow extends StatelessWidget {
                   children: [
                     Text(
                       title,
-                      style: const TextStyle(
-                        color: Colors.black,
+                      style: TextStyle(
+                        color: _appText(context),
                         fontSize: 11,
                         fontWeight: FontWeight.w900,
                       ),
@@ -10203,8 +10248,8 @@ class _SettingsActionRow extends StatelessWidget {
                     const SizedBox(height: 2),
                     Text(
                       subtitle,
-                      style: const TextStyle(
-                        color: Colors.black,
+                      style: TextStyle(
+                        color: _appMutedText(context),
                         fontSize: 10,
                         fontWeight: FontWeight.w500,
                       ),
@@ -10236,7 +10281,7 @@ class _SettingsProfileCard extends StatelessWidget {
     final initials = _initials(name);
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: const Color(0xFFDDF4EF),
+        color: _appSurfaceSoft(context),
         borderRadius: BorderRadius.circular(8),
         border: Border.all(color: const Color(0xFFC9E2DD)),
       ),
@@ -10259,8 +10304,8 @@ class _SettingsProfileCard extends StatelessWidget {
             const SizedBox(height: 18),
             Text(
               name,
-              style: const TextStyle(
-                color: Colors.black,
+              style: TextStyle(
+                color: _appText(context),
                 fontSize: 14,
                 fontWeight: FontWeight.w700,
               ),
@@ -10268,7 +10313,7 @@ class _SettingsProfileCard extends StatelessWidget {
             const SizedBox(height: 3),
             Text(
               email,
-              style: const TextStyle(color: Color(0xFF667085), fontSize: 11),
+              style: TextStyle(color: _appMutedText(context), fontSize: 11),
             ),
             const SizedBox(height: 24),
             const _SettingsMiniStat(label: 'Member since', value: 'Jan, 2026'),
@@ -10308,8 +10353,8 @@ class _SettingsMiniStat extends StatelessWidget {
         Expanded(
           child: Text(
             label,
-            style: const TextStyle(
-              color: Color(0xFF667085),
+            style: TextStyle(
+              color: _appMutedText(context),
               fontSize: 11,
               fontWeight: FontWeight.w500,
             ),
@@ -10317,8 +10362,8 @@ class _SettingsMiniStat extends StatelessWidget {
         ),
         Text(
           value,
-          style: const TextStyle(
-            color: Colors.black,
+          style: TextStyle(
+            color: _appText(context),
             fontSize: 11,
             fontWeight: FontWeight.w900,
           ),
@@ -10334,29 +10379,29 @@ class _SettingsAboutCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return _FoodLogPanel(
-      child: const Padding(
-        padding: EdgeInsets.fromLTRB(30, 24, 30, 26),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(30, 24, 30, 26),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
               'About NutriAI',
               style: TextStyle(
-                color: Colors.black,
+                color: _appText(context),
                 fontSize: 14,
                 fontWeight: FontWeight.w900,
               ),
             ),
-            SizedBox(height: 24),
-            _SettingsMiniStat(label: 'Version', value: '1.0.0'),
-            SizedBox(height: 14),
-            _SettingsMiniStat(label: 'Build', value: '2026.02.15'),
-            SizedBox(height: 28),
-            _SettingsLink('Privacy Policy'),
-            SizedBox(height: 16),
-            _SettingsLink('Terms of Service'),
-            SizedBox(height: 16),
-            _SettingsLink('Help & Support'),
+            const SizedBox(height: 24),
+            const _SettingsMiniStat(label: 'Version', value: '1.0.0'),
+            const SizedBox(height: 14),
+            const _SettingsMiniStat(label: 'Build', value: '2026.02.15'),
+            const SizedBox(height: 28),
+            const _SettingsLink('Privacy Policy'),
+            const SizedBox(height: 16),
+            const _SettingsLink('Terms of Service'),
+            const SizedBox(height: 16),
+            const _SettingsLink('Help & Support'),
           ],
         ),
       ),
@@ -10373,8 +10418,8 @@ class _SettingsLink extends StatelessWidget {
   Widget build(BuildContext context) {
     return Text(
       label,
-      style: const TextStyle(
-        color: Colors.black,
+      style: TextStyle(
+        color: _appText(context),
         fontSize: 11,
         fontWeight: FontWeight.w900,
       ),
@@ -10392,7 +10437,9 @@ class _SettingsDangerCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: const Color(0xFFFFF5F5),
+        color: _isDark(context)
+            ? const Color(0xFF2B1B1B)
+            : const Color(0xFFFFF5F5),
         borderRadius: BorderRadius.circular(8),
         border: Border.all(color: const Color(0xFFE9B7B7)),
       ),
@@ -10562,7 +10609,7 @@ class _SettingsExportDialog extends StatelessWidget {
         height: 420,
         child: DecoratedBox(
           decoration: BoxDecoration(
-            color: const Color(0xFFF7FAF8),
+            color: _appSurfaceSoft(context),
             borderRadius: BorderRadius.circular(8),
             border: Border.all(color: const Color(0xFFDDE8E1)),
           ),
@@ -10570,10 +10617,10 @@ class _SettingsExportDialog extends StatelessWidget {
             padding: const EdgeInsets.all(14),
             child: SelectableText(
               text,
-              style: const TextStyle(
+              style: TextStyle(
                 fontFamily: 'monospace',
                 fontSize: 11,
-                color: Color(0xFF17231F),
+                color: _appText(context),
               ),
             ),
           ),
@@ -10622,15 +10669,15 @@ class _SystemPageHeader extends StatelessWidget {
                   Text(
                     title,
                     style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                      color: const Color(0xFF111827),
+                      color: _appText(context),
                       fontWeight: FontWeight.w900,
                     ),
                   ),
                   const SizedBox(height: 3),
                   Text(
                     subtitle,
-                    style: const TextStyle(
-                      color: Color(0xFF667085),
+                    style: TextStyle(
+                      color: _appMutedText(context),
                       fontSize: 13,
                       fontWeight: FontWeight.w500,
                     ),
@@ -11052,12 +11099,12 @@ class _AssistantConversationsPanel extends StatelessWidget {
       ),
     ];
     return DecoratedBox(
-      decoration: const BoxDecoration(
-        color: Colors.white,
+      decoration: BoxDecoration(
+        color: _appSurface(context),
         border: Border(
-          top: BorderSide(color: Color(0xFFCFE0D6)),
-          left: BorderSide(color: Color(0xFFCFE0D6)),
-          bottom: BorderSide(color: Color(0xFFCFE0D6)),
+          top: BorderSide(color: _appBorder(context)),
+          left: BorderSide(color: _appBorder(context)),
+          bottom: BorderSide(color: _appBorder(context)),
         ),
       ),
       child: Column(
@@ -11066,11 +11113,11 @@ class _AssistantConversationsPanel extends StatelessWidget {
             padding: const EdgeInsets.fromLTRB(14, 16, 14, 12),
             child: Row(
               children: [
-                const Expanded(
+                Expanded(
                   child: Text(
                     'Conversations',
                     style: TextStyle(
-                      color: Color(0xFF111827),
+                      color: _appText(context),
                       fontSize: 14,
                       fontWeight: FontWeight.w900,
                     ),
@@ -11309,16 +11356,16 @@ class _AssistantChatPanel extends StatelessWidget {
   Widget build(BuildContext context) {
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: Colors.white,
-        border: Border.all(color: const Color(0xFFCFE0D6)),
+        color: _appSurface(context),
+        border: Border.all(color: _appBorder(context)),
       ),
       child: Column(
         children: [
           Container(
             height: 68,
             padding: const EdgeInsets.symmetric(horizontal: 18),
-            decoration: const BoxDecoration(
-              border: Border(bottom: BorderSide(color: Color(0xFFCFE0D6))),
+            decoration: BoxDecoration(
+              border: Border(bottom: BorderSide(color: _appBorder(context))),
             ),
             child: Row(
               children: [
@@ -11342,18 +11389,22 @@ class _AssistantChatPanel extends StatelessWidget {
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     crossAxisAlignment: CrossAxisAlignment.start,
-                    children: const [
+                    children: [
                       Text(
                         'NutriAI Assistant',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                         style: TextStyle(
-                          color: Color(0xFF111827),
+                          color: _appText(context),
                           fontSize: 14,
                           fontWeight: FontWeight.w900,
                         ),
                       ),
-                      SizedBox(height: 2),
-                      Text(
+                      const SizedBox(height: 2),
+                      const Text(
                         'Online · Powered by AI',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                           color: Color(0xFF16A05D),
                           fontSize: 11,
@@ -11422,8 +11473,8 @@ class _AssistantChatPanel extends StatelessWidget {
           ),
           Container(
             padding: const EdgeInsets.fromLTRB(28, 12, 28, 8),
-            decoration: const BoxDecoration(
-              border: Border(top: BorderSide(color: Color(0xFFCFE0D6))),
+            decoration: BoxDecoration(
+              border: Border(top: BorderSide(color: _appBorder(context))),
             ),
             child: Column(
               children: [
@@ -11669,12 +11720,12 @@ class _AssistantCapabilitiesPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return DecoratedBox(
-      decoration: const BoxDecoration(
-        color: Color(0xFFF8FAFC),
+      decoration: BoxDecoration(
+        color: _appSurfaceSoft(context),
         border: Border(
-          top: BorderSide(color: Color(0xFFCFE0D6)),
-          right: BorderSide(color: Color(0xFFCFE0D6)),
-          bottom: BorderSide(color: Color(0xFFCFE0D6)),
+          top: BorderSide(color: _appBorder(context)),
+          right: BorderSide(color: _appBorder(context)),
+          bottom: BorderSide(color: _appBorder(context)),
         ),
       ),
       child: ListView(
@@ -11810,7 +11861,7 @@ class _AssistantSideTitle extends StatelessWidget {
         Text(
           title,
           style: TextStyle(
-            color: const Color(0xFF111827),
+            color: _appText(context),
             fontSize: small ? 12 : 15,
             fontWeight: FontWeight.w900,
           ),
@@ -12402,22 +12453,22 @@ class _ProgressHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Column(
+    return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           'Progress Tracking',
           style: TextStyle(
-            color: Color(0xFF111827),
+            color: _appText(context),
             fontSize: 22,
             fontWeight: FontWeight.w900,
           ),
         ),
-        SizedBox(height: 3),
+        const SizedBox(height: 3),
         Text(
           'Monitor your weight and hydration progress',
           style: TextStyle(
-            color: Color(0xFF667085),
+            color: _appMutedText(context),
             fontSize: 13,
             fontWeight: FontWeight.w500,
           ),
@@ -12615,8 +12666,8 @@ class _ProgressPanel extends StatelessWidget {
           children: [
             Text(
               title,
-              style: const TextStyle(
-                color: Color(0xFF111827),
+              style: TextStyle(
+                color: _appText(context),
                 fontSize: 15,
                 fontWeight: FontWeight.w900,
               ),
@@ -13573,8 +13624,10 @@ class AppCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      child: Padding(padding: padding, child: child),
+    return _HoverLift(
+      child: Card(
+        child: Padding(padding: padding, child: child),
+      ),
     );
   }
 }
@@ -13593,60 +13646,62 @@ class StatTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        border: Border.all(color: const Color(0xFFDDE8E1)),
-        borderRadius: BorderRadius.circular(8),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x120C3B2E),
-            blurRadius: 16,
-            offset: Offset(0, 8),
-          ),
-        ],
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Row(
-          children: [
-            DecoratedBox(
-              decoration: BoxDecoration(
-                color: _metricColor(label).withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Padding(
-                padding: const EdgeInsets.all(10),
-                child: Icon(icon, color: _metricColor(label), size: 22),
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    label,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                      color: const Color(0xFF62716A),
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    value,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                      fontWeight: FontWeight.w900,
-                    ),
-                  ),
-                ],
-              ),
+    return _HoverLift(
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          border: Border.all(color: const Color(0xFFDDE8E1)),
+          borderRadius: BorderRadius.circular(8),
+          boxShadow: const [
+            BoxShadow(
+              color: Color(0x120C3B2E),
+              blurRadius: 16,
+              offset: Offset(0, 8),
             ),
           ],
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            children: [
+              DecoratedBox(
+                decoration: BoxDecoration(
+                  color: _metricColor(label).withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.all(10),
+                  child: Icon(icon, color: _metricColor(label), size: 22),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                        color: const Color(0xFF62716A),
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      value,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -13804,6 +13859,48 @@ class BannerBox extends StatelessWidget {
             Expanded(child: Text(message)),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _HoverLift extends StatefulWidget {
+  const _HoverLift({required this.child, this.borderRadius = 8});
+
+  final Widget child;
+  final double borderRadius;
+
+  @override
+  State<_HoverLift> createState() => _HoverLiftState();
+}
+
+class _HoverLiftState extends State<_HoverLift> {
+  bool _hovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final accent = Theme.of(context).colorScheme.primary;
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        curve: Curves.easeOutCubic,
+        transform: Matrix4.translationValues(0, _hovered ? -4 : 0, 0),
+        transformAlignment: Alignment.center,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(widget.borderRadius),
+          boxShadow: _hovered
+              ? [
+                  BoxShadow(
+                    color: accent.withValues(alpha: 0.18),
+                    blurRadius: 22,
+                    offset: const Offset(0, 10),
+                  ),
+                ]
+              : const [],
+        ),
+        child: widget.child,
       ),
     );
   }
