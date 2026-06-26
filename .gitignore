@@ -40,6 +40,8 @@ postgres-data/
 .vscode/
 .idea/
 *.iml
+.agents/
+skills-lock.json
 .DS_Store
 Thumbs.db
 desktop.ini

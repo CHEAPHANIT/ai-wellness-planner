@@ -6,7 +6,7 @@ class Settings(BaseSettings):
     app_name: str = "NutriAI API"
     environment: str = "development"
     database_url: str = Field(
-        default="postgresql+psycopg://postgres:postgres@localhost:5432/ai_meal_planning",
+        default="postgresql+psycopg://postgres:postgres@localhost:5433/ai_meal_planning",
         alias="DATABASE_URL",
     )
     secret_key: str = Field(default="change-this-secret-key", alias="SECRET_KEY")
