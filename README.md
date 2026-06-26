@@ -6,6 +6,29 @@ This README is written for both non-technical readers who want to understand the
 
 > **Health notice:** NutriAI is an educational university project. Its calorie estimates, health-risk screening, and chatbot responses are not medical diagnoses or replacements for advice from a qualified healthcare professional.
 
+## Submission Quick Reference
+
+| Item | Prepared file or location |
+| --- | --- |
+| Source code | `backend/`, `frontend/`, `tools/`, `docker-compose.yml`, and project documentation |
+| Main README | `README.md` |
+| Presentation | `NutriAI_Class_Presentation.pptx` |
+| Presentation source notes | `NutriAI_Class_Presentation.md` |
+| Deployment/test URL | `Deployment_Link.txt` |
+| Test login details | `Test_Credentials.txt` |
+| Optional video demo | Not included, per submission request |
+
+Team name: **NutriAI**
+
+Test account for evaluator:
+
+```text
+Email: nutriai.test.01@example.com
+Password: Password123
+```
+
+The application creates accounts through the registration screen. If the submitted database is empty, register the test account above first, then sign in with the same credentials.
+
 ## Table of Contents
 
 - [Why this system exists](#why-this-system-exists)
@@ -22,6 +45,8 @@ This README is written for both non-technical readers who want to understand the
 - [Project structure](#project-structure)
 - [API overview](#api-overview)
 - [Database overview](#database-overview)
+- [Deployment link](#deployment-link)
+- [Team member contributions](#team-member-contributions)
 - [Troubleshooting](#troubleshooting)
 
 ## Why This System Exists
@@ -730,6 +755,38 @@ health_risk_predictions     saved educational screening results
 ```
 
 Meal details are stored in `meal_plans.plan_json`, allowing breakfast, lunch, dinner, snack, calories, protein, carbohydrates, and fat to be returned as one structured plan.
+
+## Deployment Link
+
+The prepared local deployment URL is:
+
+```text
+http://localhost:8080
+```
+
+Run the full application with:
+
+```powershell
+docker compose up --build -d
+```
+
+Then open:
+
+| Purpose | URL |
+| --- | --- |
+| Web application | http://localhost:8080 |
+| Backend health check | http://localhost:8000/health |
+| API documentation | http://localhost:8000/docs |
+
+If a public hosting URL is added later, place it in `Deployment_Link.txt` and keep this local Docker URL as the backup testing link.
+
+## Team Member Contributions
+
+| Member | Contributions |
+| --- | --- |
+| NutriAI project member | Full-stack application implementation: Flutter user interface, FastAPI backend routes, SQLAlchemy models, PostgreSQL integration, Docker Compose setup, authentication, profile management, food database, allergies, meal planning, grocery lists, food logging, progress tracking, water tracking, AI service logic, testing guide, README, and presentation materials. |
+
+Update the member name before final submission if the course requires individual names.
 
 ## Troubleshooting
 

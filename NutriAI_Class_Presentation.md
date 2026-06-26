@@ -1,397 +1,209 @@
 # NutriAI: AI Nutrition and Meal Planner
 
-Class Presentation Slide Deck
+Focused Class Presentation - 12 Slides
 
 ---
 
-## Slide 1: Project Title
+## Slide 1: NutriAI
 
-# NutriAI
+**AI Nutrition and Meal Planner**
 
-## AI Nutrition and Meal Planner
-
-Presented by: _Your Name_
-
-Course: _Your Course Name_
-
-Date: _Presentation Date_
+- Presented by: Your Name
+- Course: Your Course Name
+- Date: June 2026
 
 Speaker notes:
 
-Introduce NutriAI as a full-stack web application that helps users plan meals, track nutrition, manage allergies, generate grocery lists, and receive basic AI-assisted nutrition support.
+NutriAI is a full-stack nutrition application that turns personal health information into meal recommendations, grocery preparation, daily tracking, and AI-assisted guidance.
 
 ---
 
-## Slide 2: Problem Statement
+## Slide 2: Project Overview
 
-Many people want to eat healthier, but meal planning is difficult because they must consider:
-
-- Daily calorie needs
-- Protein, carbohydrate, and fat targets
-- Allergies and dietary restrictions
-- Food preferences
-- Budget and grocery planning
-- Actual food intake compared with the plan
+- Full-stack nutrition and meal-planning application
+- Built for personalized daily food decisions
+- Supports profile-based calorie targets, allergies, preferences, and grocery planning
+- Includes practical AI-assisted features rather than one isolated model
 
 Speaker notes:
 
-Explain that users often use separate tools for diet tracking, grocery lists, and health goals. NutriAI combines these into one system.
+The project connects meal planning with real user behavior. It helps the user decide what to eat, prepare groceries, track progress, and ask nutrition questions in one system.
 
 ---
 
-## Slide 3: Project Goal
+## Slide 3: Problem Statement
 
-The goal of NutriAI is to build an intelligent meal-planning system that recommends meals based on:
-
-- User health profile
-- Body goal
-- Food allergies
-- Dietary preference
-- Nutrition targets
-- Available foods
-- Grocery budget
+- Healthy meal planning requires calories, macros, allergies, preferences, budget, and habits to be considered together.
+- Many users do not know how to translate nutrition goals into actual meals.
+- Generic plans can recommend unsafe foods for users with allergies.
+- Tracking tools and planning tools are often separated.
 
 Speaker notes:
 
-The main idea is personalization. The system does not recommend the same meal to every user. It uses user data to make the result more useful.
+The main problem is not only finding a healthy food. The harder problem is choosing meals that fit the user's body data, goal, restrictions, and daily routine.
 
 ---
 
-## Slide 4: Target Users
+## Slide 4: Proposed Solution
 
-NutriAI is designed for:
-
-- Students and working adults
-- Users who want to lose, gain, or maintain weight
-- Users who want to track calories and macronutrients
-- Users with allergies or food restrictions
-- Cambodian/local-food-focused users
+- Create an account and complete a health profile
+- Calculate BMI, BMR, maintenance calories, and goal calories
+- Store allergies and preferences
+- Generate daily or weekly meal plans
+- Convert plans into grocery lists
+- Track food, water, and weight progress
+- Ask an AI nutrition assistant for contextual guidance
 
 Speaker notes:
 
-Mention that the system includes familiar foods such as Cambodian meals, making it more relevant than generic meal planners.
+NutriAI solves the problem by connecting the full workflow: profile, restriction handling, recommendation, grocery preparation, tracking, and guidance.
 
 ---
 
-## Slide 5: Main Features
-
-NutriAI supports:
-
-- Register, login, logout, and password reset
-- Health profile management
-- BMI, BMR, and calorie target calculation
-- Food database with search and favorite foods
-- Allergy management
-- Daily and weekly meal planning
-- Grocery list generation
-- Food, water, and weight tracking
-- AI assistant and food substitute suggestions
-
-Speaker notes:
-
-Give a quick overview. Do not explain every feature deeply yet; this slide shows the system scope.
-
----
-
-## Slide 6: User Journey
-
-```text
-Create account
-      ↓
-Complete health profile
-      ↓
-Add allergies and preferences
-      ↓
-Generate meal plan
-      ↓
-Export grocery list
-      ↓
-Log food, water, and weight
-      ↓
-Track progress and ask AI assistant
-```
-
-Speaker notes:
-
-Walk through the normal flow from a new user to daily usage. This helps the audience understand how screens connect.
-
----
-
-## Slide 7: System Architecture
+## Slide 5: System Architecture
 
 | Layer | Technology | Responsibility |
 | --- | --- | --- |
-| Frontend | Flutter | User interface, navigation, forms, charts |
-| Backend | FastAPI | API routes, validation, business logic |
-| Database | PostgreSQL | Stores users, foods, profiles, plans, logs |
-| ORM | SQLAlchemy | Maps Python models to database tables |
-| Auth | JWT | Protects user-specific data |
-| Deployment | Docker Compose | Runs frontend, backend, and database |
+| Frontend | Flutter and Dart | Screens, forms, charts, navigation |
+| Backend | FastAPI and Python | REST API, validation, authentication, AI logic |
+| Database | PostgreSQL | Users, profiles, foods, plans, logs, and history |
+| Deployment | Docker Compose and Nginx | Runs database, backend, and web frontend together |
 
 Speaker notes:
 
-Explain that the app uses a client-server architecture. Flutter sends REST requests to FastAPI, FastAPI reads/writes PostgreSQL, then returns JSON responses.
+Flutter sends JSON requests to FastAPI. The backend authenticates users, runs services, reads and writes PostgreSQL through SQLAlchemy, then returns JSON responses to the interface.
 
 ---
 
-## Slide 8: How One Request Works
+## Slide 6: AI Technologies and Models Used
 
-Example: Generate meal plan
+NutriAI is a hybrid intelligent system:
+
+- Heuristic combinational search for meal recommendation
+- Mifflin-St Jeor formula for calorie target calculation
+- Nutrition-distance ranking for food substitutes
+- Rule-based health-risk screening
+- Optional LLM chatbot using Ollama or OpenAI
+- Local deterministic chatbot fallback
+- Conservative filename-based food-photo prototype
+
+Speaker notes:
+
+Not every AI feature is a neural network. The project uses explainable AI-style scoring, formulas, ranking, rules, and optional language-model guidance.
+
+---
+
+## Slide 7: Key Features
+
+- Authentication, profile setup, and secure JWT sessions
+- Food database with Cambodian and general foods
+- Allergy tracking and allergy-safe recommendations
+- Daily and weekly meal plan generation
+- Grocery list generation with estimated costs
+- Food logging and nutrition totals
+- Water and weight progress tracking
+- AI assistant, health-risk check, food substitutes, and photo assistance
+
+Speaker notes:
+
+The key feature is integration. Meal planning, grocery preparation, and tracking are connected instead of being separate tools.
+
+---
+
+## Slide 8: AI Detail - Meal Recommendation
+
+1. Load foods from PostgreSQL.
+2. Remove foods matching user allergies.
+3. Apply preference and goal rules.
+4. Divide daily targets across meals.
+5. Build combinations of one to three foods.
+6. Score calories, protein, carbohydrates, fat, category fit, and budget.
+7. Select the lowest-scoring candidate.
 
 ```text
-Flutter Meal Planner Screen
-        ↓
-REST API request
-        ↓
-FastAPI route validates input
-        ↓
-Meal recommendation service scores foods
-        ↓
-PostgreSQL saves meal plan
-        ↓
-Flutter displays result
+score = calorie gap + macro gaps + category penalty + budget penalty
 ```
 
 Speaker notes:
 
-Use this slide to explain the real backend process. The frontend is not doing all the work; it communicates with the backend service.
+This is exhaustive combinational search with heuristic scoring. A lower score means the meal is closer to the user's calorie, macro, category, and budget requirements.
 
 ---
 
-## Slide 9: AI and Intelligent Logic
+## Slide 9: AI Detail - Chatbot and Supporting Logic
 
-NutriAI uses practical AI-assisted logic:
+### Nutrition chatbot
 
-- Meal recommendation using heuristic scoring
-- Calorie target calculation using health formulas
-- Food substitute suggestions based on nutrition similarity
-- Health-risk screening using transparent rules
-- Nutrition chatbot with local or external AI provider support
-- Conservative food-photo assistance
+- Uses profile context, allergies, goals, and today's calories
+- Can use Ollama, OpenAI, or local mode
+- Falls back to local rule-based guidance if an external provider fails
+
+### Supporting AI services
+
+- Calorie model estimates BMR and target calories
+- Food substitutes rank nutritionally similar alternatives
+- Health-risk screening explains BMI, habits, and exercise signals
+- Image assistance returns unknown or low-confidence matches instead of inventing predictions
 
 Speaker notes:
 
-Clarify that this project combines formula-based logic, rule-based logic, and optional AI provider integration. This is safer and more explainable for a health-related student project.
+The assistant is designed to be useful even without an external AI provider. The supporting services are transparent so users can understand why the system produced an answer.
 
 ---
 
-## Slide 10: Meal Recommendation Logic
+## Slide 10: Results and Demo Flow
 
-The meal recommender:
+Prepared demo path:
 
-1. Loads available foods
-2. Removes foods that conflict with allergies
-3. Applies dietary preference rules
-4. Builds possible food combinations
-5. Scores each combination against targets
-6. Selects the best matching meal
+1. Register or log in with the test account
+2. Complete a health profile
+3. Add a milk allergy
+4. Generate a daily meal plan
+5. Confirm dairy foods are excluded
+6. Generate a weekly plan
+7. Export to a grocery list
+8. Log food, water, and weight
+9. Ask the nutrition assistant a milk-allergy question
 
-Simplified score:
+Expected result:
 
-```text
-score =
-  calorie difference
-+ protein difference
-+ carbohydrate difference
-+ fat difference
-+ category penalty
-+ budget penalty
-```
+- The system runs through Docker at `http://localhost:8080`
+- Backend health check returns `{"status":"ok"}`
+- Automated baseline: backend service tests and Flutter widget tests are included
 
 Speaker notes:
 
-Explain that lower score means a better match. This makes the recommendation process understandable and easier to improve later.
+The demo should prove the main AI behavior: the generated plan responds to user targets and avoids the recorded allergy. The grocery and tracking screens show that recommendations can become daily actions.
 
 ---
 
-## Slide 11: Database Design
+## Slide 11: Challenges and Lessons Learned
 
-Main data stored in PostgreSQL:
-
-- Users and authentication data
-- Health profiles and goals
-- Food database records
-- Allergies
-- Meal plans
-- Grocery items
-- Food logs
-- Water logs
-- Weight progress
-- Chatbot records and health-risk results
+- Allergy safety must be handled before scoring meal candidates.
+- AI provider failures should not break the app, so local fallback is important.
+- Food-photo recognition should be honest about confidence when no trained vision model exists.
+- Docker simplifies setup but environment variables must be documented clearly.
+- End-to-end testing is necessary because meal planning touches profiles, foods, allergies, plans, and groceries.
 
 Speaker notes:
 
-Mention that the database supports persistence, so user data remains after refresh or restart.
+The biggest lesson is that practical AI systems need reliability and transparency. A simple explainable answer is better than a confident but unsafe answer.
 
 ---
 
-## Slide 12: Frontend Screens
+## Slide 12: Conclusion
 
-The Flutter application includes:
+NutriAI turns personal data into practical food decisions by connecting:
 
-- Dashboard
-- Profile
-- Foods
-- Log Food
-- Meal Planner
-- Grocery
-- Progress
-- Allergies
-- AI Assistant
-- Settings
-
-Speaker notes:
-
-This is a good place to switch briefly to a live demo if allowed. Show the dashboard, profile, meal planner, and dark mode.
-
----
-
-## Slide 13: Recent UI Improvements
-
-The interface was improved with:
-
-- Dark mode support across the system
-- Better text contrast in dark mode
-- Hover effects on cards and buttons
-- Clickable quick action cards
-- Theme-aware dropdown colors
-- More consistent card styling
-
-Speaker notes:
-
-Connect this to usability. A health app needs to be readable and pleasant because users may use it daily.
-
----
-
-## Slide 14: Testing and Validation
-
-The project includes:
-
-- Flutter widget tests
-- Authentication flow testing
-- Navigation testing
-- Dark mode readability testing
-- Quick action button testing
-- Dropdown contrast testing
-- Backend route and service structure for API validation
-
-Speaker notes:
-
-Mention that testing helped catch visual issues, especially dark mode contrast and navigation behavior.
-
----
-
-## Slide 15: Deployment
-
-NutriAI can run with Docker Compose:
-
-```powershell
-docker compose up --build -d
-docker compose ps
-```
-
-Services:
-
-- PostgreSQL database
-- FastAPI backend
-- Flutter web frontend served through Nginx
-
-Speaker notes:
-
-Explain that Docker makes the project easier to run on another computer because it starts the whole system with one command.
-
----
-
-## Slide 16: Challenges
-
-Main challenges during development:
-
-- Connecting Flutter frontend with FastAPI backend
-- Managing authenticated user data
-- Designing personalized meal recommendation logic
-- Handling allergies safely
-- Keeping dark mode readable
-- Making the system easy to run through Docker
-
-Speaker notes:
-
-Be honest here. Challenges show that the project involved real engineering decisions, not only UI design.
-
----
-
-## Slide 17: Future Improvements
-
-Possible improvements:
-
-- Train a real food image recognition model
-- Add email/SMS OTP for real password recovery
-- Improve recommendation algorithm with machine learning
-- Add nutrition history charts
-- Support more Cambodian foods and prices
-- Add admin dashboard for food data management
-- Deploy online for public access
-
-Speaker notes:
-
-Show that the current version is complete enough for demonstration but has a clear path for future work.
-
----
-
-## Slide 18: Conclusion
-
-NutriAI provides an integrated nutrition planning experience by combining:
-
-- Personal health profiles
-- Meal recommendation
-- Allergy-aware food filtering
-- Grocery planning
+- Personalization
+- Allergy awareness
+- Meal planning
+- Grocery preparation
 - Nutrition tracking
 - AI-assisted guidance
-- Full-stack web architecture
+
+**One connected experience to personalize, plan, shop, track, and improve.**
 
 Speaker notes:
 
-End by emphasizing the value: the system helps users make better food decisions through personalization, tracking, and practical AI support.
-
----
-
-## Optional Demo Flow
-
-If you do a live demo, use this order:
-
-1. Register or log in
-2. Open Dashboard
-3. Complete or show Profile
-4. Search food database
-5. Generate a meal plan
-6. Export grocery list
-7. Log food
-8. Show Progress
-9. Toggle dark mode
-10. Ask AI Assistant a simple question
-
-Demo tip:
-
-Prepare sample data before class so the system already has profile, food logs, and meal plan results.
-
----
-
-## Short Presentation Script
-
-Good morning/afternoon everyone. Today I will present my project, NutriAI, an AI nutrition and meal planner.
-
-The problem I wanted to solve is that healthy meal planning is difficult because users need to think about calories, macronutrients, allergies, preferences, and budget at the same time. Many tools only focus on one part of the problem, so I built NutriAI as one integrated platform.
-
-The system allows users to create an account, complete a health profile, calculate BMI and calorie targets, manage allergies, generate meal plans, create grocery lists, log food, track water and weight, and ask nutrition-related questions through an AI assistant.
-
-Technically, NutriAI is a full-stack application. The frontend is built with Flutter. The backend uses Python FastAPI, and the database is PostgreSQL. The system uses JWT authentication so each user can access only their own data. Docker Compose is used to run the frontend, backend, and database together.
-
-The main intelligent feature is the meal recommendation service. It loads available foods, removes foods that conflict with allergies, applies user preferences, builds possible combinations, scores them against calorie, macro, category, and budget targets, then selects the best matching meal.
-
-This project also includes AI-assisted services such as food substitute suggestions, health-risk screening, calorie recommendation, chatbot support, and food-photo assistance. For safety, the health-related outputs are educational and not medical diagnosis.
-
-During development, I also improved the user interface with dark mode, hover effects, clickable quick actions, and better color contrast. Testing was used to verify navigation, authentication, dark mode readability, and UI behavior.
-
-In conclusion, NutriAI combines meal planning, nutrition tracking, allergy management, grocery planning, and AI guidance into one practical system. In the future, it could be improved with a trained food image recognition model, real email OTP, more food data, and online deployment.
-
-Thank you.
+NutriAI's main value is integration. It does not treat recommendations, shopping, and tracking as separate problems. Its hybrid AI approach keeps the core decisions understandable and extensible.
