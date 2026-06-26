@@ -1,14 +1,61 @@
+# Secrets and local environment
 .env
+*.env
+!.env.example
+!backend/.env.example
 .venv/
+venv/
+ENV/
+
+# Python cache and test output
 __pycache__/
 *.py[cod]
+*$py.class
 .pytest_cache/
-*.log
+.coverage
+htmlcov/
 
+# Logs and runtime files
+*.log
+*.pid
+uvicorn*.log
+uvicorn*.err.log
+
+# Flutter/Dart local output
 frontend/.dart_tool/
 frontend/.idea/
 frontend/build/
 frontend/.flutter-plugins
 frontend/.flutter-plugins-dependencies
+frontend/.pub-cache/
+frontend/.packages
 
+# Local database and Docker volumes
 postgres-data/
+*.db
+*.sqlite
+*.sqlite3
+
+# IDE and OS files
+.vscode/
+.idea/
+*.iml
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Submission-only documents and generated presentation artifacts
+PROJECT_PROPOSAL.md
+NutriAI_Class_Presentation*.md
+NutriAI_Class_Presentation*.pptx
+Deployment_Link.txt
+Test_Credentials.txt
+Submission_Checklist.md
+FinalProject_*.zip
+*.zip
+~$*.pptx
+
+# Temporary staging/extracted folders
+_submission_staging/
+_pptx_verify/
+*.ecd/
