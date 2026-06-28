@@ -9,7 +9,7 @@ class WaterLogCreate(BaseModel):
 
 
 class WaterLogRead(BaseModel):
-    id: int
+    id: int | None
     log_date: date
     amount_ml: float
     recommended_ml: float

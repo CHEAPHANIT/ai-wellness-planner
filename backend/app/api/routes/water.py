@@ -33,13 +33,15 @@ def get_water_log(
     log_date: date,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-) -> WaterLog:
+) -> WaterLog | WaterLogRead:
     log = db.query(WaterLog).filter(WaterLog.user_id == current_user.id, WaterLog.log_date == log_date).first()
     if log is None:
-        log = WaterLog(user_id=current_user.id, log_date=log_date, recommended_ml=_recommended_water_ml(db, current_user.id))
-        db.add(log)
-        db.commit()
-        db.refresh(log)
+        return WaterLogRead(
+            id=None,
+            log_date=log_date,
+            amount_ml=0,
+            recommended_ml=_recommended_water_ml(db, current_user.id),
+        )
     return log
 
 

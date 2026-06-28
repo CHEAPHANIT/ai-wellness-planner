@@ -1720,25 +1720,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
         final carbs = _numValue(summary['carbs_g']);
         final fats = _numValue(summary['fat_g']);
         final water = _numValue(data.water['amount_ml']);
-        final calorieTarget = _numValue(
-          data.goal['daily_calorie_target'],
-          fallback: 2000,
-        );
-        final proteinTarget = _numValue(
-          data.goal['protein_target_g'],
-          fallback: 120,
-        );
-        final waterTarget = _numValue(
-          data.water['recommended_ml'],
-          fallback: 2500,
-        );
-        final currentWeight = _numValue(
+        final calorieTarget = _numOrNull(data.goal['daily_calorie_target']);
+        final proteinTarget = _numOrNull(data.goal['protein_target_g']);
+        final waterTarget = _numOrNull(data.water['recommended_ml']);
+        final currentWeight = _numOrNull(
           data.progress['current_weight'] ?? data.profile['weight_kg'],
-          fallback: 72.5,
         );
-        final targetWeight = _numValue(
+        final targetWeight = _numOrNull(
           data.progress['target_weight'] ?? data.profile['target_weight_kg'],
-          fallback: 70,
         );
         final weekly = data.weeklySummaries
             .map((item) => _numValue(item['calories']))
@@ -1769,34 +1758,46 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     DashboardMetricCard(
                       icon: Icons.local_fire_department_outlined,
                       iconColor: const Color(0xFF16A05D),
-                      value: '${calories.round()} / ${calorieTarget.round()}',
+                      value: calorieTarget == null
+                          ? '${calories.round()} / Set profile'
+                          : '${calories.round()} / ${calorieTarget.round()}',
                       label: 'Calories',
-                      progress: calorieTarget <= 0
+                      progress: calorieTarget == null || calorieTarget <= 0
                           ? 0
                           : (calories / calorieTarget).clamp(0, 1),
                     ),
                     DashboardMetricCard(
                       icon: Icons.monitor_heart_outlined,
                       iconColor: const Color(0xFF2EB8F0),
-                      value: '${protein.round()} / ${proteinTarget.round()}g',
+                      value: proteinTarget == null
+                          ? '${protein.round()}g / Set profile'
+                          : '${protein.round()}g / ${proteinTarget.round()}g',
                       label: 'Protein',
-                      progress: proteinTarget <= 0
+                      progress: proteinTarget == null || proteinTarget <= 0
                           ? 0
                           : (protein / proteinTarget).clamp(0, 1),
                     ),
                     DashboardMetricCard(
                       icon: Icons.water_drop_outlined,
                       iconColor: const Color(0xFF2EB8F0),
-                      value: '${water.round()}ml / ${waterTarget.round()}ml',
+                      value: waterTarget == null
+                          ? '${water.round()}ml / Set profile'
+                          : '${water.round()}ml / ${waterTarget.round()}ml',
                       label: 'Water Intake',
-                      progress: waterTarget <= 0
+                      progress: waterTarget == null || waterTarget <= 0
                           ? 0
                           : (water / waterTarget).clamp(0, 1),
                     ),
                     DashboardWeightCard(
-                      value: '${currentWeight.toStringAsFixed(1)} kg',
-                      target: 'Target: ${targetWeight.toStringAsFixed(0)} kg',
-                      delta: targetWeight - currentWeight,
+                      value: currentWeight == null
+                          ? 'No weight yet'
+                          : '${currentWeight.toStringAsFixed(1)} kg',
+                      target: targetWeight == null
+                          ? 'Set a profile target'
+                          : 'Target: ${targetWeight.toStringAsFixed(0)} kg',
+                      delta: currentWeight == null || targetWeight == null
+                          ? null
+                          : targetWeight - currentWeight,
                     ),
                   ],
                 ),
@@ -1877,10 +1878,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   double _numValue(dynamic value, {double fallback = 0}) {
+    return _numOrNull(value) ?? fallback;
+  }
+
+  double? _numOrNull(dynamic value) {
     if (value is num) {
       return value.toDouble();
     }
-    return double.tryParse(value?.toString() ?? '') ?? fallback;
+    return double.tryParse(value?.toString() ?? '');
   }
 }
 
@@ -3869,7 +3874,7 @@ class DashboardWeightCard extends StatelessWidget {
 
   final String value;
   final String target;
-  final double delta;
+  final double? delta;
 
   @override
   Widget build(BuildContext context) {
@@ -3886,14 +3891,15 @@ class DashboardWeightCard extends StatelessWidget {
                   color: Color(0xFFFFA12B),
                 ),
                 const Spacer(),
-                Text(
-                  '${delta >= 0 ? '+' : ''}${delta.toStringAsFixed(1)}kg',
-                  style: const TextStyle(
-                    color: Color(0xFF16A05D),
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
+                if (delta != null)
+                  Text(
+                    '${delta! >= 0 ? '+' : ''}${delta!.toStringAsFixed(1)}kg',
+                    style: const TextStyle(
+                      color: Color(0xFF16A05D),
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
-                ),
               ],
             ),
             const Spacer(),
