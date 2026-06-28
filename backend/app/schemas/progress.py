@@ -18,6 +18,7 @@ class WeightProgressRead(BaseModel):
 
 class WeightProgressSummary(BaseModel):
     current_weight: float | None
+    start_weight: float | None
     target_weight: float | None
     progress_percentage: float
     history: list[WeightProgressRead]

@@ -4987,7 +4987,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         },
         goal: {
           'goal_type': _goal,
-          'target_weight_kg': double.tryParse(_targetWeight.text) ?? 70,
+          'target_weight_kg': double.tryParse(_targetWeight.text),
           'daily_calorie_target': _targetCalories.round(),
           'protein_target_g': double.tryParse(_protein.text) ?? 120,
           'carbs_target_g': double.tryParse(_carbs.text) ?? 200,
@@ -5059,6 +5059,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   age: _age,
                   height: _height,
                   weight: _weight,
+                  targetWeight: _targetWeight,
                   conditions: _conditions,
                   gender: _gender,
                   activity: _activity,
@@ -5151,6 +5152,7 @@ class ProfileFormCard extends StatelessWidget {
     required this.age,
     required this.height,
     required this.weight,
+    required this.targetWeight,
     required this.conditions,
     required this.gender,
     required this.activity,
@@ -5172,6 +5174,7 @@ class ProfileFormCard extends StatelessWidget {
   final TextEditingController age;
   final TextEditingController height;
   final TextEditingController weight;
+  final TextEditingController targetWeight;
   final TextEditingController conditions;
   final String gender;
   final String activity;
@@ -5227,6 +5230,11 @@ class ProfileFormCard extends StatelessWidget {
                   label: 'Weight (kg)',
                   hint: '72.5',
                   onChanged: onMetricsChanged,
+                ),
+                ProfileTextField(
+                  controller: targetWeight,
+                  label: 'Target Weight (kg)',
+                  hint: '67.5',
                 ),
               ],
             ),
@@ -12152,7 +12160,7 @@ class ProgressScreen extends StatefulWidget {
 }
 
 class _ProgressScreenState extends State<ProgressScreen> {
-  final _weight = TextEditingController(text: '72.5');
+  final _weight = TextEditingController();
   final _date = TextEditingController(text: todayIsoDate());
   final _water = TextEditingController(text: '250');
   Map<String, dynamic>? _progress;
@@ -12186,6 +12194,12 @@ class _ProgressScreenState extends State<ProgressScreen> {
         _waterLog = water;
         _waterHistory = waterHistory;
         _error = null;
+        if (_weight.text.trim().isEmpty) {
+          final currentWeight = _foodNumber(progress['current_weight']);
+          if (currentWeight > 0) {
+            _weight.text = _formatFoodNumber(currentWeight);
+          }
+        }
       });
     } catch (error) {
       setState(() => _error = error.toString());
@@ -12220,9 +12234,7 @@ class _ProgressScreenState extends State<ProgressScreen> {
     final history = _weightHistory(_progress);
     final currentWeight = _foodNumber(_progress?['current_weight']);
     final targetWeight = _foodNumber(_progress?['target_weight']);
-    final startWeight = history.isEmpty
-        ? currentWeight
-        : _foodNumber(history.first['weight_kg']);
+    final startWeight = _foodNumber(_progress?['start_weight']);
     final progress = _foodNumber(_progress?['progress_percentage']);
     final waterAmount = _foodNumber(_waterLog?['amount_ml']);
     final recommendedWater = _foodNumber(_waterLog?['recommended_ml']);
@@ -12284,7 +12296,7 @@ class _ProgressScreenState extends State<ProgressScreen> {
                 footer: _ProgressBar(
                   value: progress / 100,
                   caption:
-                      '${_formatFoodNumber((currentWeight - targetWeight).abs())} kg to goal',
+                  '${_formatFoodNumber((currentWeight - targetWeight).abs())} kg to goal',
                   color: const Color(0xFF16A05D),
                 ),
               ),

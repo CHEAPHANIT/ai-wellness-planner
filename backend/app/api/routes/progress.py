@@ -27,13 +27,14 @@ def get_weight_progress(
     profile = db.query(UserProfile).filter(UserProfile.user_id == current_user.id).first()
     goal = db.query(Goal).filter(Goal.user_id == current_user.id).first()
     current_weight = history[-1].weight_kg if history else (profile.weight_kg if profile else None)
-    start_weight = history[0].weight_kg if history else (profile.weight_kg if profile else None)
+    start_weight = profile.weight_kg if profile and profile.weight_kg else (history[0].weight_kg if history else None)
     target_weight = goal.target_weight_kg if goal else None
     progress = 0.0
     if start_weight and current_weight and target_weight and start_weight != target_weight:
         progress = ((start_weight - current_weight) / (start_weight - target_weight)) * 100
     return WeightProgressSummary(
         current_weight=current_weight,
+        start_weight=start_weight,
         target_weight=target_weight,
         progress_percentage=round(max(0, min(progress, 100)), 2),
         history=history,
