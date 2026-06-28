@@ -5,18 +5,7 @@ NutriAI is a web and mobile-ready application that helps people plan meals, unde
 This README is written for both non-technical readers who want to understand the idea and technical readers who want to install, test, or extend the project.
 
 > **Health notice:** NutriAI is an educational university project. Its calorie estimates, health-risk screening, and chatbot responses are not medical diagnoses or replacements for advice from a qualified healthcare professional.
-
-## Submission Quick Reference
-
-| Item | Prepared file or location |
-| --- | --- |
-| Source code | `backend/`, `frontend/`, `tools/`, `docker-compose.yml`, and project documentation |
-| Main README | `README.md` |
-| Presentation | `NutriAI_Class_Presentation.pptx` |
-| Presentation source notes | `NutriAI_Class_Presentation.md` |
-| Deployment/test URL | `Deployment_Link.txt` |
-| Test login details | `Test_Credentials.txt` |
-| Optional video demo | Not included, per submission request |
+c
 
 Team name: **NutriAI**
 
