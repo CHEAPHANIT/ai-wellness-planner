@@ -77,7 +77,7 @@ SLIDES = [
             ("Flutter", "Frontend", "Screens, forms, charts"),
             ("FastAPI", "Backend", "REST API, auth, AI logic"),
             ("PostgreSQL", "Database", "Users, foods, plans, logs"),
-            ("Docker", "Deployment", "Compose, Nginx, service startup"),
+            ("Vercel + Neon", "Deployment", "Hosted web, API and database"),
         ],
     },
     {
@@ -138,7 +138,7 @@ SLIDES = [
             ("5", "Check safety", "Verify dairy foods are excluded."),
             ("6", "Use results", "Export groceries and log food, water and weight."),
         ],
-        "footer": "Local app: http://localhost:8080   Backend health: http://localhost:8000/health",
+        "footer": "Live app: frontend-peach-nine-3tf89350e5.vercel.app   Health: backend-sigma-two-51.vercel.app/health",
     },
     {
         "title": "Practical AI systems need reliability and honesty",

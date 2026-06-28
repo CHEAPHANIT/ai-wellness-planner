@@ -20,6 +20,18 @@ This README is written for both non-technical readers who want to understand the
 
 Team name: **NutriAI**
 
+Live application:
+
+```text
+https://frontend-peach-nine-3tf89350e5.vercel.app
+```
+
+Backend health check:
+
+```text
+https://backend-sigma-two-51.vercel.app/health
+```
+
 Test account for evaluator:
 
 ```text
@@ -27,7 +39,7 @@ Email: nutriai.test.01@example.com
 Password: Password123
 ```
 
-The application creates accounts through the registration screen. If the submitted database is empty, register the test account above first, then sign in with the same credentials.
+This test account has been created on the deployed database and can be used to sign in directly.
 
 ## Table of Contents
 
@@ -195,7 +207,8 @@ There is no trained computer-vision classifier in the current version. The safe 
 | ORM | SQLAlchemy | Maps Python models to database tables |
 | Authentication | JWT bearer tokens | Protects user-specific API endpoints |
 | AI providers | Ollama/OpenAI/local rules | Optional conversational nutrition guidance |
-| Deployment | Docker Compose | Starts the database, backend, and web frontend together |
+| Local deployment | Docker Compose | Starts the database, backend, and web frontend together |
+| Public deployment | Vercel and Neon | Hosts Flutter web, FastAPI serverless backend, and PostgreSQL |
 
 ## Quick Setup With Docker
 
@@ -758,7 +771,33 @@ Meal details are stored in `meal_plans.plan_json`, allowing breakfast, lunch, di
 
 ## Deployment Link
 
-The prepared local deployment URL is:
+The public deployed application URL is:
+
+```text
+https://frontend-peach-nine-3tf89350e5.vercel.app
+```
+
+The deployed backend API is:
+
+```text
+https://backend-sigma-two-51.vercel.app
+```
+
+Backend health check:
+
+```text
+https://backend-sigma-two-51.vercel.app/health
+```
+
+API documentation:
+
+```text
+https://backend-sigma-two-51.vercel.app/docs
+```
+
+The public deployment uses Vercel for the Flutter web frontend and FastAPI backend, with Neon PostgreSQL for the hosted database.
+
+The local backup URL is:
 
 ```text
 http://localhost:8080
@@ -778,7 +817,7 @@ Then open:
 | Backend health check | http://localhost:8000/health |
 | API documentation | http://localhost:8000/docs |
 
-If a public hosting URL is added later, place it in `Deployment_Link.txt` and keep this local Docker URL as the backup testing link.
+The same links are also listed in `Deployment_Link.txt`.
 
 ## Team Member Contributions
 
