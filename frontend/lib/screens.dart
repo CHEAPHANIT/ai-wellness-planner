@@ -631,14 +631,7 @@ class _AuthForm extends StatelessWidget {
                     const SizedBox(height: 18),
                     Row(
                       children: [
-                        Expanded(
-                          child: Text(
-                            'Session stays active until logout',
-                            style: Theme.of(context).textTheme.bodyMedium
-                                ?.copyWith(color: const Color(0xFF4B5563)),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
+                        const Spacer(),
                         TextButton(
                           onPressed: loading ? null : onForgotPassword,
                           style: TextButton.styleFrom(
@@ -5871,12 +5864,12 @@ class PlannerScreen extends StatefulWidget {
 }
 
 class _PlannerScreenState extends State<PlannerScreen> {
-  final _calories = TextEditingController(text: '2200');
-  final _protein = TextEditingController(text: '140');
-  final _carbs = TextEditingController(text: '240');
-  final _fat = TextEditingController(text: '70');
+  final _calories = TextEditingController();
+  final _protein = TextEditingController();
+  final _carbs = TextEditingController();
+  final _fat = TextEditingController();
   final _allergies = TextEditingController();
-  final _budget = TextEditingController(text: '35');
+  final _budget = TextEditingController();
   String _goal = 'maintain';
   String _preference = 'high-protein';
   bool _loading = false;
@@ -5904,7 +5897,7 @@ class _PlannerScreenState extends State<PlannerScreen> {
   }
 
   Map<String, dynamic> get _payload => {
-    'daily_calorie_target': int.tryParse(_calories.text) ?? 2200,
+    'daily_calorie_target': int.tryParse(_calories.text) ?? 2000,
     'health_goal': _goal,
     'food_preference': _preference,
     'allergies': _allergies.text
@@ -6161,6 +6154,7 @@ class _PlannerScreenState extends State<PlannerScreen> {
                             child: NumberField(
                               controller: _calories,
                               label: 'Daily calories',
+                              hintText: '2000',
                             ),
                           ),
                           SizedBox(
@@ -6168,6 +6162,7 @@ class _PlannerScreenState extends State<PlannerScreen> {
                             child: NumberField(
                               controller: _protein,
                               label: 'Protein (g)',
+                              hintText: '120',
                             ),
                           ),
                           SizedBox(
@@ -6175,6 +6170,7 @@ class _PlannerScreenState extends State<PlannerScreen> {
                             child: NumberField(
                               controller: _carbs,
                               label: 'Carbohydrates (g)',
+                              hintText: '200',
                             ),
                           ),
                           SizedBox(
@@ -6182,6 +6178,7 @@ class _PlannerScreenState extends State<PlannerScreen> {
                             child: NumberField(
                               controller: _fat,
                               label: 'Fat (g)',
+                              hintText: '65',
                             ),
                           ),
                           SizedBox(
@@ -6189,6 +6186,7 @@ class _PlannerScreenState extends State<PlannerScreen> {
                             child: NumberField(
                               controller: _budget,
                               label: 'Daily grocery budget estimate',
+                              hintText: '35',
                             ),
                           ),
                           SizedBox(
@@ -13775,17 +13773,23 @@ class SelectField extends StatelessWidget {
 }
 
 class NumberField extends StatelessWidget {
-  const NumberField({super.key, required this.controller, required this.label});
+  const NumberField({
+    super.key,
+    required this.controller,
+    required this.label,
+    this.hintText,
+  });
 
   final TextEditingController controller;
   final String label;
+  final String? hintText;
 
   @override
   Widget build(BuildContext context) {
     return TextFormField(
       controller: controller,
       keyboardType: TextInputType.number,
-      decoration: InputDecoration(labelText: label),
+      decoration: InputDecoration(labelText: label, hintText: hintText),
     );
   }
 }
