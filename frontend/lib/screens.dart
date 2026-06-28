@@ -85,7 +85,6 @@ class _AuthScreenState extends State<AuthScreen> {
   final _confirmPassword = TextEditingController();
   bool _register = false;
   bool _loading = false;
-  bool _rememberMe = false;
   bool _showPassword = false;
   bool _showCreatePassword = false;
   bool _showConfirmPassword = false;
@@ -114,13 +113,11 @@ class _AuthScreenState extends State<AuthScreen> {
           email: _email.text.trim(),
           fullName: _name.text.trim(),
           password: _password.text,
-          rememberMe: _rememberMe,
         );
       } else {
         await widget.apiClient.login(
           email: _email.text.trim(),
           password: _password.text,
-          rememberMe: _rememberMe,
         );
       }
       widget.onAuthenticated();
@@ -204,15 +201,11 @@ class _AuthScreenState extends State<AuthScreen> {
                       formKey: _formKey,
                       register: _register,
                       loading: _loading,
-                      rememberMe: _rememberMe,
                       showPassword: _showPassword,
                       error: _error,
                       email: _email,
                       name: _name,
                       password: _password,
-                      onRememberChanged: (value) {
-                        setState(() => _rememberMe = value ?? false);
-                      },
                       onPasswordVisibilityChanged: () {
                         setState(() => _showPassword = !_showPassword);
                       },
@@ -522,13 +515,11 @@ class _AuthForm extends StatelessWidget {
     required this.formKey,
     required this.register,
     required this.loading,
-    required this.rememberMe,
     required this.showPassword,
     required this.error,
     required this.email,
     required this.name,
     required this.password,
-    required this.onRememberChanged,
     required this.onPasswordVisibilityChanged,
     required this.onForgotPassword,
     required this.onRegisterChanged,
@@ -538,13 +529,11 @@ class _AuthForm extends StatelessWidget {
   final GlobalKey<FormState> formKey;
   final bool register;
   final bool loading;
-  final bool rememberMe;
   final bool showPassword;
   final String? error;
   final TextEditingController email;
   final TextEditingController name;
   final TextEditingController password;
-  final ValueChanged<bool?> onRememberChanged;
   final VoidCallback onPasswordVisibilityChanged;
   final VoidCallback onForgotPassword;
   final ValueChanged<bool> onRegisterChanged;
@@ -642,32 +631,14 @@ class _AuthForm extends StatelessWidget {
                     const SizedBox(height: 18),
                     Row(
                       children: [
-                        SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: Checkbox(
-                            value: rememberMe,
-                            onChanged: onRememberChanged,
-                            materialTapTargetSize:
-                                MaterialTapTargetSize.shrinkWrap,
-                            visualDensity: VisualDensity.compact,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(4),
-                            ),
-                            side: const BorderSide(
-                              color: Color(0xFFCDD5DF),
-                              width: 1.2,
-                            ),
-                            activeColor: const Color(0xFF16A05D),
+                        Expanded(
+                          child: Text(
+                            'Session stays active until logout',
+                            style: Theme.of(context).textTheme.bodyMedium
+                                ?.copyWith(color: const Color(0xFF4B5563)),
                           ),
                         ),
-                        const SizedBox(width: 8),
-                        Text(
-                          'Remember me',
-                          style: Theme.of(context).textTheme.bodyMedium
-                              ?.copyWith(color: const Color(0xFF4B5563)),
-                        ),
-                        const Spacer(),
+                        const SizedBox(width: 12),
                         TextButton(
                           onPressed: loading ? null : onForgotPassword,
                           style: TextButton.styleFrom(

@@ -65,7 +65,7 @@ class ApiClient {
     required String email,
     required String fullName,
     required String password,
-    bool rememberMe = false,
+    bool rememberMe = true,
   }) async {
     await _postJson('/api/auth/register', {
       'email': email,
@@ -78,7 +78,7 @@ class ApiClient {
   Future<void> login({
     required String email,
     required String password,
-    bool rememberMe = false,
+    bool rememberMe = true,
   }) async {
     final response = await http.post(
       _uri('/api/auth/login'),
@@ -88,11 +88,7 @@ class ApiClient {
     final data = _decode(response) as Map<String, dynamic>;
     _token = data['access_token'] as String;
     final preferences = await SharedPreferences.getInstance();
-    if (rememberMe) {
-      await preferences.setString(_tokenKey, _token!);
-    } else {
-      await preferences.remove(_tokenKey);
-    }
+    await preferences.setString(_tokenKey, _token!);
   }
 
   Future<Map<String, dynamic>> me() async {
