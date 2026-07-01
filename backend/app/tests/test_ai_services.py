@@ -157,6 +157,57 @@ def test_chatbot_local_mode_avoids_network_and_uses_daily_context(monkeypatch: p
     assert "1,450" in response.answer or "1450" in response.answer
 
 
+def test_chatbot_weight_gain_food_question_does_not_return_weight_loss_advice(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(settings, "ai_provider", "local")
+    response = NutritionChatbot().answer(ChatRequest(question="i want to gainst weight so what food i need ot to eat?"))
+
+    assert response.source == "local-rule-based"
+    assert "weight gain" in response.answer.lower()
+    assert "weight loss" not in response.answer.lower()
+
+
+def test_chatbot_food_question_avoids_chicken_allergy(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(settings, "ai_provider", "local")
+    user = SimpleNamespace(
+        profile=None,
+        goal=None,
+        allergies=[SimpleNamespace(ingredient="chicken")],
+    )
+    response = NutritionChatbot().answer(
+        ChatRequest(question="i have allergies with chicken so what are the food that I should eat?"),
+        user=user,
+    )
+
+    assert response.source == "local-rule-based"
+    assert "avoid chicken" in response.answer.lower()
+    assert "chicken" not in response.answer.lower().replace("avoid chicken", "")
+
+
+def test_chatbot_uses_saved_weight_gain_goal_for_food_question(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(settings, "ai_provider", "local")
+    user = SimpleNamespace(
+        profile=None,
+        goal=SimpleNamespace(goal_type="gain_weight"),
+        allergies=[],
+    )
+    response = NutritionChatbot().answer(ChatRequest(question="what should I eat for lunch?"), user=user)
+
+    assert response.source == "local-rule-based"
+    assert "weight gain" in response.answer.lower()
+    assert "extra snack" in response.answer.lower() or "increase portions" in response.answer.lower()
+
+
+def test_chatbot_parses_non_configured_allergy_from_question(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(settings, "ai_provider", "local")
+    response = NutritionChatbot().answer(ChatRequest(question="I am allergic to shrimp, what protein should I eat?"))
+
+    assert response.source == "local-rule-based"
+    assert "avoid shrimp" in response.answer.lower()
+    assert "shrimp" not in response.answer.lower().replace("avoid shrimp", "")
+
+
 def test_saved_plan_is_updated_instead_of_duplicated() -> None:
     engine = create_engine(
         "sqlite://",

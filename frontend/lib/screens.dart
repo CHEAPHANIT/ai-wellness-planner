@@ -4872,8 +4872,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
   final _conditions = TextEditingController();
   String _gender = 'male';
   String _activity = 'moderate';
-  String _goal = 'maintain';
-  String _preference = 'high-protein';
+  String _goal = '';
+  String _preference = '';
   String _exercise = '3 days per week';
   String _habits = 'balanced';
   bool _loading = false;
@@ -4936,10 +4936,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
     try {
       await widget.apiClient.saveProfile(
         profile: {
-          'age': int.tryParse(_age.text) ?? 28,
+          'age': int.tryParse(_age.text),
           'gender': _gender,
-          'height_cm': double.tryParse(_height.text) ?? 175,
-          'weight_kg': double.tryParse(_weight.text) ?? 72.5,
+          'height_cm': double.tryParse(_height.text),
+          'weight_kg': double.tryParse(_weight.text),
           'activity_level': _activity,
           'food_preference': _preference,
           'dietary_preference': _preference,
@@ -4952,10 +4952,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
         goal: {
           'goal_type': _goal,
           'target_weight_kg': double.tryParse(_targetWeight.text),
-          'daily_calorie_target': _targetCalories.round(),
-          'protein_target_g': double.tryParse(_protein.text) ?? 120,
-          'carbs_target_g': double.tryParse(_carbs.text) ?? 200,
-          'fat_target_g': double.tryParse(_fat.text) ?? 65,
+          'daily_calorie_target': _targetCalories?.round(),
+          'protein_target_g': double.tryParse(_protein.text),
+          'carbs_target_g': double.tryParse(_carbs.text),
+          'fat_target_g': double.tryParse(_fat.text),
         },
       );
       if (!mounted) {
@@ -5073,24 +5073,42 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  double get _heightValue => double.tryParse(_height.text) ?? 175;
-  double get _weightValue => double.tryParse(_weight.text) ?? 72.5;
-  int get _ageValue => int.tryParse(_age.text) ?? 28;
+  double? get _heightValue => double.tryParse(_height.text);
+  double? get _weightValue => double.tryParse(_weight.text);
+  int? get _ageValue => int.tryParse(_age.text);
 
-  double get _bmi {
-    final meters = _heightValue / 100;
-    if (meters <= 0) {
-      return 0;
+  bool get _hasCalculationInputs =>
+      _heightValue != null &&
+      _heightValue! > 0 &&
+      _weightValue != null &&
+      _weightValue! > 0 &&
+      _ageValue != null &&
+      _ageValue! > 0;
+
+  double? get _bmi {
+    if (_heightValue == null || _weightValue == null) {
+      return null;
     }
-    return _weightValue / (meters * meters);
+    final meters = _heightValue! / 100;
+    if (meters <= 0) {
+      return null;
+    }
+    return _weightValue! / (meters * meters);
   }
 
-  double get _bmr {
-    final base = 10 * _weightValue + 6.25 * _heightValue - 5 * _ageValue;
+  double? get _bmr {
+    if (!_hasCalculationInputs) {
+      return null;
+    }
+    final base = 10 * _weightValue! + 6.25 * _heightValue! - 5 * _ageValue!;
     return _gender == 'female' ? base - 161 : base + 5;
   }
 
-  double get _targetCalories {
+  double? get _targetCalories {
+    final bmr = _bmr;
+    if (bmr == null) {
+      return null;
+    }
     final multiplier = switch (_activity) {
       'sedentary' => 1.2,
       'light' => 1.375,
@@ -5099,7 +5117,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       'very_active' => 1.9,
       _ => 1.55,
     };
-    final maintenance = _bmr * multiplier;
+    final maintenance = bmr * multiplier;
     return switch (_goal) {
       'lose_weight' => maintenance - 400,
       'gain_muscle' => maintenance + 250,
@@ -5547,9 +5565,9 @@ class ProfileInsightColumn extends StatelessWidget {
     required this.targetCalories,
   });
 
-  final double bmi;
-  final double bmr;
-  final double targetCalories;
+  final double? bmi;
+  final double? bmr;
+  final double? targetCalories;
 
   @override
   Widget build(BuildContext context) {
@@ -5559,18 +5577,21 @@ class ProfileInsightColumn extends StatelessWidget {
         const SizedBox(height: 22),
         ProfileNumberCard(
           title: 'Basal Metabolic Rate',
-          value: bmr.round().toString(),
+          value: bmr?.round().toString(),
           unit: 'calories/day',
           color: const Color(0xFF4C8DF6),
           note: 'This is the number of calories your body burns at rest',
+          emptyNote: 'Enter age, height, and weight to calculate BMR.',
         ),
         const SizedBox(height: 22),
         ProfileNumberCard(
           title: 'Target Daily Calories',
-          value: targetCalories.round().toString(),
+          value: targetCalories?.round().toString(),
           unit: 'calories/day',
           color: const Color(0xFFFF7417),
           note: 'Based on your activity level and selected health goal',
+          emptyNote:
+              'Enter profile measurements to calculate a calorie target.',
         ),
       ],
     );
@@ -5670,7 +5691,7 @@ class ProfileSavedDialog extends StatelessWidget {
 class BmiInsightCard extends StatelessWidget {
   const BmiInsightCard({super.key, required this.bmi});
 
-  final double bmi;
+  final double? bmi;
 
   @override
   Widget build(BuildContext context) {
@@ -5692,7 +5713,7 @@ class BmiInsightCard extends StatelessWidget {
               child: Column(
                 children: [
                   Text(
-                    bmi.toStringAsFixed(1),
+                    bmi == null ? '--' : bmi!.toStringAsFixed(1),
                     style: const TextStyle(
                       color: Color(0xFF16B978),
                       fontSize: 48,
@@ -5702,7 +5723,9 @@ class BmiInsightCard extends StatelessWidget {
                   ),
                   const SizedBox(height: 10),
                   Text(
-                    _bmiCategory(bmi),
+                    bmi == null
+                        ? 'Enter height and weight'
+                        : _bmiCategory(bmi!),
                     style: const TextStyle(
                       color: Color(0xFF16B978),
                       fontWeight: FontWeight.w900,
@@ -5712,17 +5735,29 @@ class BmiInsightCard extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 28),
-            const BmiRangeRow(label: 'Underweight', value: '< 18.5'),
-            const SizedBox(height: 10),
-            const BmiRangeRow(
-              label: 'Normal',
-              value: '18.5 - 24.9',
-              highlighted: true,
+            BmiRangeRow(
+              label: 'Underweight',
+              value: '< 18.5',
+              highlighted: bmi != null && bmi! < 18.5,
             ),
             const SizedBox(height: 10),
-            const BmiRangeRow(label: 'Overweight', value: '25 - 29.9'),
+            BmiRangeRow(
+              label: 'Normal',
+              value: '18.5 - 24.9',
+              highlighted: bmi != null && bmi! >= 18.5 && bmi! < 25,
+            ),
             const SizedBox(height: 10),
-            const BmiRangeRow(label: 'Obese', value: '>= 30'),
+            BmiRangeRow(
+              label: 'Overweight',
+              value: '25 - 29.9',
+              highlighted: bmi != null && bmi! >= 25 && bmi! < 30,
+            ),
+            const SizedBox(height: 10),
+            BmiRangeRow(
+              label: 'Obese',
+              value: '>= 30',
+              highlighted: bmi != null && bmi! >= 30,
+            ),
           ],
         ),
       ),
@@ -5797,13 +5832,15 @@ class ProfileNumberCard extends StatelessWidget {
     required this.unit,
     required this.color,
     required this.note,
+    required this.emptyNote,
   });
 
   final String title;
-  final String value;
+  final String? value;
   final String unit;
   final Color color;
   final String note;
+  final String emptyNote;
 
   @override
   Widget build(BuildContext context) {
@@ -5824,7 +5861,7 @@ class ProfileNumberCard extends StatelessWidget {
             ),
             const SizedBox(height: 30),
             Text(
-              value,
+              value ?? '--',
               style: TextStyle(
                 color: color,
                 fontSize: 40,
@@ -5834,12 +5871,12 @@ class ProfileNumberCard extends StatelessWidget {
             ),
             const SizedBox(height: 8),
             Text(
-              unit,
+              value == null ? 'not calculated' : unit,
               style: TextStyle(color: _appMutedText(context), fontSize: 13),
             ),
             const SizedBox(height: 26),
             Text(
-              note,
+              value == null ? emptyNote : note,
               textAlign: TextAlign.center,
               style: TextStyle(
                 color: _appMutedText(context),
@@ -5898,8 +5935,8 @@ class _PlannerScreenState extends State<PlannerScreen> {
 
   Map<String, dynamic> get _payload => {
     'daily_calorie_target': int.tryParse(_calories.text) ?? 2000,
-    'health_goal': _goal,
-    'food_preference': _preference,
+    'health_goal': _goal.isEmpty ? 'maintain' : _goal,
+    'food_preference': _preference.isEmpty ? 'balanced' : _preference,
     'allergies': _allergies.text
         .split(',')
         .map((item) => item.trim())
@@ -5922,25 +5959,9 @@ class _PlannerScreenState extends State<PlannerScreen> {
       final profile = await widget.apiClient.profile();
       final goal = await widget.apiClient.goal() ?? <String, dynamic>{};
       final allergies = await widget.apiClient.allergies();
-      var calories = _foodNumber(goal['daily_calorie_target']);
-      if (calories <= 0 &&
-          profile['age'] != null &&
-          profile['height_cm'] != null &&
-          profile['weight_kg'] != null) {
-        final prediction = await widget.apiClient.predictCalories({
-          'age': profile['age'],
-          'gender': profile['gender'] ?? 'male',
-          'height_cm': profile['height_cm'],
-          'weight_kg': profile['weight_kg'],
-          'activity_level': profile['activity_level'] ?? 'moderate',
-          'goal': goal['goal_type'] ?? 'maintain',
-        });
-        calories = _foodNumber(prediction['recommended_daily_calories']);
-      }
       if (!mounted) return;
       setState(() {
         _savedPlans = plans;
-        if (calories > 0) _calories.text = calories.round().toString();
         if (goal['protein_target_g'] != null) {
           _protein.text = _formatFoodNumber(
             _foodNumber(goal['protein_target_g']),
@@ -5952,8 +5973,12 @@ class _PlannerScreenState extends State<PlannerScreen> {
         if (goal['fat_target_g'] != null) {
           _fat.text = _formatFoodNumber(_foodNumber(goal['fat_target_g']));
         }
-        _goal = goal['goal_type']?.toString() ?? _goal;
-        _preference = profile['food_preference']?.toString() ?? _preference;
+        final loadedGoal = goal['goal_type']?.toString();
+        final loadedPreference = profile['food_preference']?.toString();
+        _goal = loadedGoal == null || loadedGoal.isEmpty ? _goal : loadedGoal;
+        _preference = loadedPreference == null || loadedPreference.isEmpty
+            ? _preference
+            : loadedPreference;
         _allergies.text = allergies
             .map((item) => item['ingredient']?.toString() ?? '')
             .where((item) => item.isNotEmpty)
@@ -6154,7 +6179,6 @@ class _PlannerScreenState extends State<PlannerScreen> {
                             child: NumberField(
                               controller: _calories,
                               label: 'Daily calories',
-                              hintText: '2000',
                             ),
                           ),
                           SizedBox(
@@ -6162,7 +6186,6 @@ class _PlannerScreenState extends State<PlannerScreen> {
                             child: NumberField(
                               controller: _protein,
                               label: 'Protein (g)',
-                              hintText: '120',
                             ),
                           ),
                           SizedBox(
@@ -6170,7 +6193,6 @@ class _PlannerScreenState extends State<PlannerScreen> {
                             child: NumberField(
                               controller: _carbs,
                               label: 'Carbohydrates (g)',
-                              hintText: '200',
                             ),
                           ),
                           SizedBox(
@@ -6178,7 +6200,6 @@ class _PlannerScreenState extends State<PlannerScreen> {
                             child: NumberField(
                               controller: _fat,
                               label: 'Fat (g)',
-                              hintText: '65',
                             ),
                           ),
                           SizedBox(
@@ -6186,16 +6207,13 @@ class _PlannerScreenState extends State<PlannerScreen> {
                             child: NumberField(
                               controller: _budget,
                               label: 'Daily grocery budget estimate',
-                              hintText: '35',
                             ),
                           ),
                           SizedBox(
                             width: width,
-                            child: TextFormField(
+                            child: PlannerTextField(
                               controller: _allergies,
-                              decoration: const InputDecoration(
-                                labelText: 'Allergies (comma separated)',
-                              ),
+                              label: 'Allergies (comma separated)',
                             ),
                           ),
                           SizedBox(
@@ -10838,13 +10856,122 @@ class _AssistantScreenState extends State<AssistantScreen> {
   bool _recognizing = false;
   String? _error;
   Map<String, dynamic>? _risk;
-  final List<_AssistantChatMessage> _messages = [
-    const _AssistantChatMessage(
-      role: _AssistantRole.assistant,
-      text:
-          'Hi, I am your nutrition assistant. Ask me about meals, calories, dieting, hydration, allergies, or healthier swaps.',
-    ),
-  ];
+  int _nextConversationNumber = 1;
+  String _activeConversationId = 'current-chat';
+  late final List<_AssistantConversation> _conversations =
+      _seedAssistantConversations();
+
+  _AssistantConversation get _activeConversation => _conversations.firstWhere(
+    (conversation) => conversation.id == _activeConversationId,
+  );
+
+  List<_AssistantConversation> _seedAssistantConversations() {
+    return [
+      _AssistantConversation(
+        id: 'current-chat',
+        title: 'New Chat',
+        preview: 'Ask a nutrition question...',
+        timeLabel: 'Now',
+        messages: [_welcomeAssistantMessage],
+      ),
+      _AssistantConversation(
+        id: 'breakfast-protein',
+        title: 'Breakfast Protein Sources',
+        preview: 'What are good protein...',
+        timeLabel: '9:01 AM',
+        messages: const [
+          _AssistantChatMessage(
+            role: _AssistantRole.user,
+            text: 'What are good protein sources for breakfast?',
+          ),
+          _AssistantChatMessage(
+            role: _AssistantRole.assistant,
+            text:
+                'Good breakfast protein sources include eggs, Greek yogurt, tofu scramble, fish, chicken, beans, lentils, milk, soy milk, and nuts or seeds if you are not allergic.',
+            source: 'local-rule-based',
+          ),
+        ],
+      ),
+      _AssistantConversation(
+        id: 'weekly-meal-plan',
+        title: 'Weekly Meal Plan',
+        preview: 'Can you create a 7-day...',
+        timeLabel: 'Yesterday',
+        messages: const [
+          _AssistantChatMessage(
+            role: _AssistantRole.user,
+            text: 'Can you create a 7-day weekly meal plan?',
+          ),
+          _AssistantChatMessage(
+            role: _AssistantRole.assistant,
+            text:
+                'A simple weekly meal plan should repeat reliable meals and vary proteins. Use this structure: breakfast with protein, lunch with rice or whole carbs plus protein, dinner lighter with vegetables, and one planned snack.',
+            source: 'local-rule-based',
+          ),
+        ],
+      ),
+      _AssistantConversation(
+        id: 'cambodian-food-calories',
+        title: 'Cambodian Food Calories',
+        preview: 'How many calories in Lok Lak?',
+        timeLabel: 'Mon',
+        messages: const [
+          _AssistantChatMessage(
+            role: _AssistantRole.user,
+            text: 'How many calories are in Cambodian beef lok lak?',
+          ),
+          _AssistantChatMessage(
+            role: _AssistantRole.assistant,
+            text:
+                'Beef lok lak calories vary by portion, oil, rice, and sauce. A typical restaurant plate with rice and egg can often land around 650-900 kcal, while a lighter homemade serving may be lower.',
+            source: 'local-rule-based',
+          ),
+        ],
+      ),
+      _AssistantConversation(
+        id: 'allergy-safe-recipes',
+        title: 'Allergy-safe Recipes',
+        preview: 'I am allergic to nuts...',
+        timeLabel: 'Sun',
+        messages: const [
+          _AssistantChatMessage(
+            role: _AssistantRole.user,
+            text: 'Suggest allergy-safe recipes without nuts.',
+          ),
+          _AssistantChatMessage(
+            role: _AssistantRole.assistant,
+            text:
+                'Nut-free options include grilled fish with rice and vegetables, chicken soup, tofu stir fry, egg fried rice with extra vegetables, or lentil curry. Always check sauces and packaged ingredients for nut traces.',
+            source: 'local-rule-based',
+          ),
+        ],
+      ),
+      _AssistantConversation(
+        id: 'weight-loss-tips',
+        title: 'Weight Loss Tips',
+        preview: 'What deficit should I aim for?',
+        timeLabel: 'Last week',
+        messages: const [
+          _AssistantChatMessage(
+            role: _AssistantRole.user,
+            text: 'What calorie deficit should I aim for?',
+          ),
+          _AssistantChatMessage(
+            role: _AssistantRole.assistant,
+            text:
+                'For weight loss, aim for a moderate calorie deficit rather than eating as little as possible. A practical target is losing about 0.25-1% of body weight per week.',
+            source: 'local-rule-based',
+          ),
+        ],
+      ),
+    ];
+  }
+
+  static const _welcomeAssistantMessage = _AssistantChatMessage(
+    role: _AssistantRole.assistant,
+    text:
+        'Hi, I am your nutrition assistant. Ask me about meals, calories, dieting, hydration, allergies, or healthier swaps.',
+  );
 
   @override
   void dispose() {
@@ -10859,18 +10986,25 @@ class _AssistantScreenState extends State<AssistantScreen> {
     if (question.isEmpty) {
       return;
     }
+    final conversation = _activeConversation;
     setState(() {
       _loading = true;
       _error = null;
-      _messages.add(
+      conversation.messages.add(
         _AssistantChatMessage(role: _AssistantRole.user, text: question),
       );
+      conversation.title = conversation.title == 'New Chat'
+          ? _titleFromQuestion(question)
+          : conversation.title;
+      conversation.preview = _previewFromText(question);
+      conversation.timeLabel = 'Now';
+      _moveActiveConversationToTop();
       _question.clear();
     });
     try {
       final result = await widget.apiClient.askNutritionQuestion(question);
       setState(
-        () => _messages.add(
+        () => conversation.messages.add(
           _AssistantChatMessage(
             role: _AssistantRole.assistant,
             text: result['answer']?.toString() ?? 'I could not answer that.',
@@ -10885,6 +11019,60 @@ class _AssistantScreenState extends State<AssistantScreen> {
         setState(() => _loading = false);
       }
     }
+  }
+
+  void _startNewConversation() {
+    final id = 'new-chat-${_nextConversationNumber++}';
+    setState(() {
+      _conversations.insert(
+        0,
+        _AssistantConversation(
+          id: id,
+          title: 'New Chat',
+          preview: 'Ask a nutrition question...',
+          timeLabel: 'Now',
+          messages: [_welcomeAssistantMessage],
+        ),
+      );
+      _activeConversationId = id;
+      _question.clear();
+      _error = null;
+    });
+  }
+
+  void _selectConversation(String id) {
+    setState(() {
+      _activeConversationId = id;
+      _question.clear();
+      _error = null;
+    });
+  }
+
+  void _moveActiveConversationToTop() {
+    final index = _conversations.indexWhere(
+      (conversation) => conversation.id == _activeConversationId,
+    );
+    if (index <= 0) {
+      return;
+    }
+    final conversation = _conversations.removeAt(index);
+    _conversations.insert(0, conversation);
+  }
+
+  String _titleFromQuestion(String question) {
+    final trimmed = question.trim();
+    if (trimmed.length <= 28) {
+      return trimmed;
+    }
+    return '${trimmed.substring(0, 28)}...';
+  }
+
+  String _previewFromText(String text) {
+    final trimmed = text.trim();
+    if (trimmed.length <= 32) {
+      return trimmed;
+    }
+    return '${trimmed.substring(0, 29)}...';
   }
 
   Future<void> _predictRisk() async {
@@ -10932,22 +11120,29 @@ class _AssistantScreenState extends State<AssistantScreen> {
       final name = recognized['food_name']?.toString() ?? 'food';
       final calories = recognized['estimated_calories']?.toString() ?? '-';
       final confidence = _foodNumber(recognized['confidence']);
+      final conversation = _activeConversation;
       setState(() {
-        _messages.add(
+        conversation.messages.add(
           _AssistantChatMessage(
             role: _AssistantRole.user,
             text: 'Uploaded food photo: ${file.name}',
           ),
         );
-        _messages.add(
+        conversation.messages.add(
           _AssistantChatMessage(
             role: _AssistantRole.assistant,
             text: confidence <= 0 || name == 'Unknown Food'
                 ? 'I could not identify that photo reliably. Please enter the food name and serving size manually.'
-                : 'The filename suggests $name ($calories kcal per saved serving), but this is a low-confidence match—not visual recognition.',
+                : 'The filename suggests $name ($calories kcal per saved serving), but this is a low-confidence match - not visual recognition.',
             source: 'food recognition',
           ),
         );
+        conversation.title = conversation.title == 'New Chat'
+            ? 'Food Photo'
+            : conversation.title;
+        conversation.preview = 'Uploaded food photo: ${file.name}';
+        conversation.timeLabel = 'Now';
+        _moveActiveConversationToTop();
       });
     } catch (error) {
       setState(() => _error = error.toString());
@@ -10965,7 +11160,7 @@ class _AssistantScreenState extends State<AssistantScreen> {
         final wide = constraints.maxWidth >= 1220;
         final medium = constraints.maxWidth >= 920;
         final chat = _AssistantChatPanel(
-          messages: _messages,
+          messages: _activeConversation.messages,
           controller: _question,
           loading: _loading,
           onAsk: () => _ask(),
@@ -10993,7 +11188,12 @@ class _AssistantScreenState extends State<AssistantScreen> {
                   children: [
                     SizedBox(
                       width: 270,
-                      child: _AssistantConversationsPanel(onPrompt: _ask),
+                      child: _AssistantConversationsPanel(
+                        conversations: _conversations,
+                        activeConversationId: _activeConversationId,
+                        onSelectConversation: _selectConversation,
+                        onNewConversation: _startNewConversation,
+                      ),
                     ),
                     const SizedBox(width: 0),
                     Expanded(child: chat),
@@ -11042,45 +11242,37 @@ class _AssistantChatMessage {
   final String? source;
 }
 
-class _AssistantConversationsPanel extends StatelessWidget {
-  const _AssistantConversationsPanel({required this.onPrompt});
+class _AssistantConversation {
+  _AssistantConversation({
+    required this.id,
+    required this.title,
+    required this.preview,
+    required this.timeLabel,
+    required List<_AssistantChatMessage> messages,
+  }) : messages = List<_AssistantChatMessage>.of(messages);
 
-  final ValueChanged<String> onPrompt;
+  final String id;
+  String title;
+  String preview;
+  String timeLabel;
+  final List<_AssistantChatMessage> messages;
+}
+
+class _AssistantConversationsPanel extends StatelessWidget {
+  const _AssistantConversationsPanel({
+    required this.conversations,
+    required this.activeConversationId,
+    required this.onSelectConversation,
+    required this.onNewConversation,
+  });
+
+  final List<_AssistantConversation> conversations;
+  final String activeConversationId;
+  final ValueChanged<String> onSelectConversation;
+  final VoidCallback onNewConversation;
 
   @override
   Widget build(BuildContext context) {
-    final conversations = [
-      (
-        'Breakfast Protein Sources',
-        'What are good protein...',
-        '9:01 AM',
-        'What are good protein sources for breakfast?',
-      ),
-      (
-        'Weekly Meal Plan',
-        'Can you create a 7-day...',
-        'Yesterday',
-        'Can you create a 7-day weekly meal plan?',
-      ),
-      (
-        'Cambodian Food Calories',
-        'How many calories in Lok Lak?',
-        'Mon',
-        'How many calories are in Cambodian beef lok lak?',
-      ),
-      (
-        'Allergy-safe Recipes',
-        'I am allergic to nuts...',
-        'Sun',
-        'Suggest allergy-safe recipes without nuts.',
-      ),
-      (
-        'Weight Loss Tips',
-        'What deficit should I aim for?',
-        'Last week',
-        'What calorie deficit should I aim for?',
-      ),
-    ];
     return DecoratedBox(
       decoration: BoxDecoration(
         color: _appSurface(context),
@@ -11107,7 +11299,7 @@ class _AssistantConversationsPanel extends StatelessWidget {
                   ),
                 ),
                 FilledButton.icon(
-                  onPressed: () => onPrompt('Start a new nutrition chat.'),
+                  onPressed: onNewConversation,
                   icon: const Icon(Icons.add, size: 14),
                   label: const Text('New'),
                   style: FilledButton.styleFrom(
@@ -11149,9 +11341,9 @@ class _AssistantConversationsPanel extends StatelessWidget {
               separatorBuilder: (_, _) => const SizedBox(height: 4),
               itemBuilder: (context, index) {
                 final conversation = conversations[index];
-                final active = index == 0;
+                final active = conversation.id == activeConversationId;
                 return InkWell(
-                  onTap: () => onPrompt(conversation.$4),
+                  onTap: () => onSelectConversation(conversation.id),
                   borderRadius: BorderRadius.circular(8),
                   child: DecoratedBox(
                     decoration: BoxDecoration(
@@ -11172,7 +11364,7 @@ class _AssistantConversationsPanel extends StatelessWidget {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
-                                  conversation.$1,
+                                  conversation.title,
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                   style: TextStyle(
@@ -11185,7 +11377,7 @@ class _AssistantConversationsPanel extends StatelessWidget {
                                 ),
                                 const SizedBox(height: 5),
                                 Text(
-                                  conversation.$2,
+                                  conversation.preview,
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                   style: const TextStyle(
@@ -11199,7 +11391,7 @@ class _AssistantConversationsPanel extends StatelessWidget {
                           ),
                           const SizedBox(width: 8),
                           Text(
-                            conversation.$3,
+                            conversation.timeLabel,
                             style: const TextStyle(
                               color: Color(0xFF8A9791),
                               fontSize: 9,
@@ -12265,7 +12457,7 @@ class _ProgressScreenState extends State<ProgressScreen> {
                 footer: _ProgressBar(
                   value: progress / 100,
                   caption:
-                  '${_formatFoodNumber((currentWeight - targetWeight).abs())} kg to goal',
+                      '${_formatFoodNumber((currentWeight - targetWeight).abs())} kg to goal',
                   color: const Color(0xFF16A05D),
                 ),
               ),
@@ -13756,42 +13948,103 @@ class SelectField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return DropdownButtonFormField<String>(
-      key: ValueKey(value),
-      initialValue: value,
-      decoration: InputDecoration(labelText: label),
-      items: values
-          .map((item) => DropdownMenuItem(value: item, child: Text(item)))
-          .toList(),
-      onChanged: (value) {
-        if (value != null) {
-          onChanged(value);
-        }
-      },
+    final selectedValue = values.contains(value) ? value : null;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        ProfileFieldLabel(label),
+        const SizedBox(height: 8),
+        DropdownButtonFormField<String>(
+          key: ValueKey('$label-$selectedValue'),
+          initialValue: selectedValue,
+          isExpanded: true,
+          decoration: _profileInputDecoration(context, null),
+          dropdownColor: _appSurface(context),
+          hint: Text(
+            'Choose $label',
+            style: TextStyle(color: _appMutedText(context), fontSize: 14),
+          ),
+          style: TextStyle(color: _appText(context), fontSize: 14),
+          icon: const Icon(
+            Icons.keyboard_arrow_down,
+            color: Color(0xFF98A2B3),
+            size: 18,
+          ),
+          items: values
+              .map(
+                (item) => DropdownMenuItem(
+                  value: item,
+                  child: Text(_prettyPlannerLabel(item)),
+                ),
+              )
+              .toList(),
+          onChanged: (value) {
+            if (value != null) {
+              onChanged(value);
+            }
+          },
+        ),
+      ],
     );
   }
 }
 
 class NumberField extends StatelessWidget {
-  const NumberField({
+  const NumberField({super.key, required this.controller, required this.label});
+
+  final TextEditingController controller;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return PlannerTextField(
+      controller: controller,
+      label: label,
+      keyboardType: TextInputType.number,
+    );
+  }
+}
+
+class PlannerTextField extends StatelessWidget {
+  const PlannerTextField({
     super.key,
     required this.controller,
     required this.label,
-    this.hintText,
+    this.keyboardType,
   });
 
   final TextEditingController controller;
   final String label;
-  final String? hintText;
+  final TextInputType? keyboardType;
 
   @override
   Widget build(BuildContext context) {
-    return TextFormField(
-      controller: controller,
-      keyboardType: TextInputType.number,
-      decoration: InputDecoration(labelText: label, hintText: hintText),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        ProfileFieldLabel(label),
+        const SizedBox(height: 8),
+        TextFormField(
+          controller: controller,
+          keyboardType: keyboardType,
+          style: TextStyle(color: _appText(context), fontSize: 14),
+          decoration: _profileInputDecoration(context, null),
+        ),
+      ],
     );
   }
+}
+
+String _prettyPlannerLabel(String value) {
+  return value
+      .replaceAll('_', ' ')
+      .replaceAll('-', ' ')
+      .split(' ')
+      .map(
+        (part) =>
+            part.isEmpty ? part : part[0].toUpperCase() + part.substring(1),
+      )
+      .join(' ');
 }
 
 class ErrorBanner extends StatelessWidget {
